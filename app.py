@@ -1,0 +1,697 @@
+from flask import Flask, render_template, request, redirect, url_for, send_file
+import psycopg2
+from datetime import datetime, timedelta, date
+import pandas as pd
+import io
+from flask import session
+from collections import defaultdict
+from datetime import date, timedelta
+from flask import request, redirect, url_for
+import os
+import bcrypt
+
+
+
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-key")
+# 🔌 Supabase PostgreSQL Connection
+def get_db_connection():
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require"
+    )
+
+
+
+# 🔁 Helper: generate week → day → date mapping
+def generate_week_dates(start_date, total_weeks=20):
+    days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+    week_map = {}
+    for w in range(1, total_weeks + 1):
+        week_start = start_date + timedelta(weeks=w - 1)
+        week_map[w] = {
+            d: (week_start + timedelta(days=i)).strftime("%d/%m/%Y")
+            for i, d in enumerate(days)
+        }
+    return week_map
+
+
+# ================= HOME =================
+@app.route('/')
+def index():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+
+    # ✅ include role
+    cur.execute("""
+        SELECT faculty_id, name, role
+        FROM faculty
+        ORDER BY name
+    """)
+    faculty = cur.fetchall()
+
+    cur.execute("""
+        SELECT section_id, section_name
+        FROM sections
+        ORDER BY section_name
+    """)
+    sections = cur.fetchall()
+
+    return render_template(
+        "index.html",
+        faculty=faculty,
+        sections=sections
+    )
+
+
+
+# ================= FACULTY FLOW =================
+@app.route('/faculty-login', methods=['POST'])
+def faculty_login():
+    login_type = request.form['login_type']   # faculty | admin
+    faculty_id = int(request.form['faculty_id'])
+    password = request.form['password']
+    section_id = request.form['section_id']
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # 🔐 Authenticate using plain password (TESTING ONLY)
+    cur.execute("""
+        SELECT faculty_id, role
+        FROM faculty
+        WHERE faculty_id = %s
+          AND password = %s
+    """, (faculty_id, password))
+
+    row = cur.fetchone()
+
+    if not row:
+        return "Invalid credentials", 403
+
+    logged_in_id, role = row
+
+    # 🚫 Role misuse protection
+    if login_type == 'faculty' and role != 'faculty':
+        return "Use HOD/AHOD login", 403
+
+    if login_type == 'admin' and role not in ('hod', 'ahod'):
+        return "Unauthorized admin access", 403
+
+    # 🔐 Create session
+    session.clear()
+    session['faculty_id'] = logged_in_id
+    session['role'] = role
+    session['section_id'] = section_id
+
+    # 🔀 Redirect properly
+    if role in ('hod','ahod'):
+      return redirect(url_for('admin_dashboard'))
+    else:
+      return redirect(url_for('faculty_dashboard'))
+
+
+
+@app.route('/admin-dashboard')
+def admin_dashboard():
+    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM faculty WHERE faculty_id=%s",
+                (session['faculty_id'],))
+    admin_name = cur.fetchone()[0]
+
+    cur.execute("SELECT section_name FROM sections WHERE section_id=%s",
+                (session['section_id'],))
+    section_name = cur.fetchone()[0]
+
+    return render_template(
+        "admin_dashboard.html",
+        admin_name=admin_name,
+        faculty_id=session['faculty_id'],
+        section_id=session['section_id'],
+        section_name=section_name
+    )
+@app.route('/faculty-audit')
+def faculty_audit():
+    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    selected_date = request.args.get('date')
+
+    query = """
+        SELECT
+            a.date,
+            f_marker.name AS marked_by,
+            f_class.name  AS class_faculty,
+            s.section_name
+        FROM attendance a
+        JOIN faculty f_marker ON f_marker.faculty_id = a.marked_by
+        JOIN faculty f_class  ON f_class.faculty_id  = a.faculty_id
+        JOIN sections s       ON s.section_id = a.section_id
+    """
+
+    params = []
+
+    if selected_date:
+        query += " WHERE a.date = %s"
+        params.append(selected_date)
+
+    query += """
+        GROUP BY a.date, f_marker.name, f_class.name, s.section_name
+        ORDER BY a.date DESC
+    """
+
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+
+    return render_template(
+        "faculty_audit.html",
+        rows=rows
+    )
+
+@app.route('/admin-attendance', methods=['GET'])
+def admin_attendance():
+    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    selected_faculty = request.args.get('faculty_id', type=int)
+    selected_subject = request.args.get('subject')
+    selected_date = request.args.get('date')
+
+    # Load all faculty for dropdown
+    cur.execute("""
+        SELECT faculty_id, name
+        FROM faculty
+        WHERE role='faculty'
+        ORDER BY name
+    """)
+    faculty_list = cur.fetchall()
+
+    # Load subjects for selected faculty
+    subjects = []
+    if selected_faculty:
+        cur.execute("""
+            SELECT DISTINCT subject
+            FROM class_schedule
+            WHERE faculty_id=%s
+            ORDER BY subject
+        """, (selected_faculty,))
+        subjects = [r[0] for r in cur.fetchall()]
+
+    report = []
+    present_count = absent_count = None
+
+    if selected_faculty and selected_subject and selected_date:
+        report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+
+        cur.execute("""
+            SELECT s.roll_no, a.status
+            FROM attendance a
+            JOIN students s ON s.student_id = a.student_id
+            WHERE a.faculty_id = %s
+              AND a.date = %s
+              AND EXISTS (
+                    SELECT 1 FROM class_schedule cs
+                    WHERE cs.faculty_id = a.faculty_id
+                      AND cs.section_id = a.section_id
+                      AND cs.subject = %s
+              )
+            ORDER BY s.roll_no
+        """, (selected_faculty, report_date, selected_subject))
+
+        rows = cur.fetchall()
+
+        report = [{"roll": r[0], "status": r[1]} for r in rows]
+
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE status='Present'),
+                COUNT(*) FILTER (WHERE status='Absent')
+            FROM attendance
+            WHERE faculty_id=%s
+              AND date=%s
+        """, (selected_faculty, report_date))
+
+        present_count, absent_count = cur.fetchone()
+
+    return render_template(
+        "admin_readonly.html",
+        faculty_list=faculty_list,
+        subjects=subjects,
+        report=report,
+        selected_faculty=selected_faculty,
+        selected_subject=selected_subject,
+        selected_date=selected_date,
+        present_count=present_count,
+        absent_count=absent_count
+    )
+
+
+
+@app.route('/select', methods=['POST'])
+def select():
+    faculty_id = request.form['faculty_id']
+    section_id = request.form['section_id']
+    return redirect(url_for('attendance', faculty_id=faculty_id, section_id=section_id))
+
+
+@app.route('/attendance/<faculty_id>/<section_id>')
+def attendance(faculty_id, section_id):
+    if 'faculty_id' not in session:
+     return redirect(url_for('index'))
+
+# Normal faculty restriction
+    if session['role'] == 'faculty':
+     if int(faculty_id) != session['faculty_id']:
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+
+    # Detect elective group (GT / DF)
+    cur.execute("""
+        SELECT DISTINCT group_id
+        FROM class_schedule
+        WHERE faculty_id=%s AND section_id=%s AND group_id IS NOT NULL
+    """, (faculty_id, section_id))
+    row = cur.fetchone()
+    faculty_group_id = row[0] if row else None
+
+    # Load students
+    if faculty_group_id:
+        cur.execute("""
+            SELECT student_id, roll_no, name
+            FROM students
+            WHERE section_id=%s AND group_id=%s
+            ORDER BY roll_no
+        """, (section_id, faculty_group_id))
+    else:
+        cur.execute("""
+            SELECT student_id, roll_no, name
+            FROM students
+            WHERE section_id=%s
+            ORDER BY roll_no
+        """, (section_id,))
+
+    students = cur.fetchall()
+
+    # Faculty class days
+    cur.execute("""
+        SELECT DISTINCT day_of_week
+        FROM class_schedule
+        WHERE faculty_id=%s AND section_id=%s
+    """, (faculty_id, section_id))
+    class_days = [r[0] for r in cur.fetchall()]
+
+    semester_start = date(2026, 1, 19)
+    week_dates = generate_week_dates(semester_start)
+
+    return render_template(
+        "attendance.html",
+        students=students,
+        faculty_id=faculty_id,
+        section_id=section_id,
+        class_days=class_days,
+        week_dates=week_dates
+    )
+
+
+@app.route('/save', methods=['POST'])
+def save():
+    if session['role'] in ('hod','ahod'):
+        return "Admins cannot mark attendance", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    faculty_id = int(request.form['faculty_id'])
+    section_id = int(request.form['section_id'])
+    week_id = int(request.form['week_id'])
+    attendance_date = request.form['attendance_date']
+
+    class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
+
+    cur.execute("""
+        SELECT student_id
+        FROM students
+        WHERE section_id=%s
+    """, (section_id,))
+    students = cur.fetchall()
+
+    for (student_id,) in students:
+        status = "Absent" if f"att_{student_id}" in request.form else "Present"
+
+        cur.execute("""
+    INSERT INTO attendance
+    (student_id, faculty_id, section_id, week_id, date, status, marked_by)
+    VALUES (%s,%s,%s,%s,%s,%s,%s)
+    ON CONFLICT (student_id, date, faculty_id, section_id)
+    DO UPDATE SET
+        status = EXCLUDED.status,
+        marked_by = EXCLUDED.marked_by
+""", (
+    student_id,
+    faculty_id,
+    section_id,
+    week_id,
+    class_date,
+    status,
+    session['faculty_id']
+))
+
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(url_for('week_report', week_id=week_id))
+
+
+
+# ================= WEEK REPORT =================
+@app.route('/week-report')
+def week_report():
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    selected_date = request.args.get('date')
+    subject = request.args.get('subject', 'All')
+    status_filter = request.args.get('filter', 'All')
+
+    if not selected_date:
+        return render_template("week_report.html", report=None)
+
+    report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+
+    query = """
+        SELECT s.roll_no, s.name, a.status
+        FROM attendance a
+        JOIN students s ON s.student_id = a.student_id
+        WHERE a.date = %s
+    """
+    params = [report_date]
+
+    # 🔐 Role-based filtering
+    if session.get('role') == 'faculty':
+        query += " AND a.faculty_id = %s"
+        params.append(session['faculty_id'])
+
+    if status_filter != "All":
+        query += " AND a.status = %s"
+        params.append(status_filter)
+
+    query += " ORDER BY s.roll_no"
+
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+
+    report = [
+        {"roll": r[0], "name": r[1], "status": r[2]}
+        for r in rows
+    ]
+
+    cur.execute("""
+        SELECT
+            COUNT(*) FILTER (WHERE status='Present'),
+            COUNT(*) FILTER (WHERE status='Absent')
+        FROM attendance
+        WHERE date = %s
+    """, (report_date,))
+
+    present_count, absent_count = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "week_report.html",
+        report=report,
+        selected_date=selected_date,
+        present_count=present_count,
+        absent_count=absent_count
+    )
+
+
+
+
+
+# ================= STUDENT REPORT =================
+@app.route('/student-report')
+def student_report():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT section_id, section_name FROM sections")
+    sections = cur.fetchall()
+    return render_template("student_report.html", sections=sections)
+
+
+@app.route('/get-students/<int:section_id>')
+def get_students(section_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT student_id, roll_no, name
+        FROM students
+        WHERE section_id=%s
+        ORDER BY roll_no
+    """, (section_id,))
+    students = cur.fetchall()
+
+    return {
+        "students": [
+            {"id": s[0], "roll": s[1], "name": s[2]}
+            for s in students
+        ]
+    }
+
+
+@app.route('/get-subjects')
+def get_subjects():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT DISTINCT subject FROM class_schedule ORDER BY subject")
+    return {"subjects": [r[0] for r in cur.fetchall()]}
+
+@app.route('/get-student-attendance/<int:student_id>')
+def get_student_attendance(student_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+
+    week_id = request.args.get('week_id', type=int)
+    subject = request.args.get('subject', 'All')
+
+    if not week_id:
+        return {"attendance": []}
+
+    semester_start = date(2026, 1, 19)
+    week_start = semester_start + timedelta(weeks=week_id - 1)
+    week_end = week_start + timedelta(days=5)
+
+    query = """
+        SELECT a.date, cs.subject, a.status
+        FROM attendance a
+        JOIN class_schedule cs
+          ON cs.section_id = a.section_id
+         AND cs.faculty_id = a.faculty_id
+         AND cs.day_of_week = TO_CHAR(a.date, 'FMDay')
+        WHERE a.student_id = %s
+          AND a.date BETWEEN %s AND %s
+    """
+    params = [student_id, week_start, week_end]
+
+    if subject != "All":
+        query += " AND cs.subject = %s"
+        params.append(subject)
+
+    query += " ORDER BY a.date"
+
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+
+    return {
+        "attendance": [
+            {
+                "date": r[0].strftime("%d-%m-%Y"),
+                "subject": r[1],
+                "status": r[2]
+            }
+            for r in rows
+        ]
+    }
+
+
+
+# ================= EXPORT =================
+@app.route('/download-excel')
+def download_excel():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    selected_date = request.args.get('date')
+    class_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+
+    cur.execute("""
+        SELECT s.roll_no, s.name, a.status
+        FROM attendance a
+        JOIN students s ON s.student_id=a.student_id
+        WHERE a.date=%s
+        ORDER BY s.roll_no
+    """, (class_date,))
+    rows = cur.fetchall()
+
+    df = pd.DataFrame(rows, columns=["Roll No", "Name", "Status"])
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f"Attendance_{selected_date}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+@app.route('/download-faculty-report')
+def download_faculty_report():
+    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            f_marker.name AS marked_by,
+            f_class.name  AS class_faculty,
+            s.section_name,
+            a.date
+        FROM attendance a
+        JOIN faculty f_marker ON f_marker.faculty_id = a.marked_by
+        JOIN faculty f_class  ON f_class.faculty_id  = a.faculty_id
+        JOIN sections s       ON s.section_id = a.section_id
+        GROUP BY f_marker.name, f_class.name, s.section_name, a.date
+        ORDER BY a.date DESC
+    """)
+
+    rows = cur.fetchall()
+
+    df = pd.DataFrame(
+        rows,
+        columns=["Marked By", "Class Faculty", "Section", "Date"]
+    )
+
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="Faculty_Attendance_Audit.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+@app.route('/download-student-excel')
+def download_student_excel():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+
+    student_id = request.args.get('student_id', type=int)
+    week_id = request.args.get('week_id', type=int)
+    subject = request.args.get('subject', 'All')
+
+    if not student_id or not week_id:
+        return "Missing parameters", 400
+
+    semester_start = date(2026, 1, 19)
+    week_start = semester_start + timedelta(weeks=week_id - 1)
+    week_end = week_start + timedelta(days=5)
+
+    query = """
+        SELECT a.date, cs.subject, a.status
+        FROM attendance a
+        JOIN class_schedule cs
+          ON cs.section_id = a.section_id
+         AND cs.faculty_id = a.faculty_id
+         AND cs.day_of_week = TO_CHAR(a.date, 'FMDay')
+        WHERE a.student_id = %s
+          AND a.date BETWEEN %s AND %s
+    """
+    params = [student_id, week_start, week_end]
+
+    if subject != "All":
+        query += " AND cs.subject = %s"
+        params.append(subject)
+
+    query += " ORDER BY a.date"
+
+    cur.execute(query, tuple(params))
+    rows = cur.fetchall()
+
+    df = pd.DataFrame(
+        rows,
+        columns=["Date", "Subject", "Status"]
+    )
+
+    df["Date"] = df["Date"].apply(lambda d: d.strftime("%d-%m-%Y"))
+
+
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f"Student_Attendance_Week_{week_id}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+@app.route('/faculty-dashboard')
+def faculty_dashboard():
+    if 'faculty_id' not in session or session['role'] != 'faculty':
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM faculty WHERE faculty_id=%s",
+                (session['faculty_id'],))
+    faculty_name = cur.fetchone()[0]
+
+    cur.execute("SELECT section_name FROM sections WHERE section_id=%s",
+                (session['section_id'],))
+    section_name = cur.fetchone()[0]
+
+    return render_template(
+        "faculty_dashboard.html",
+        faculty_name=faculty_name,
+        faculty_id=session['faculty_id'],
+        section_id=session['section_id'],
+        section_name=section_name
+    )
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+

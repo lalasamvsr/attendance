@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Attendance System</title>
+<style>
+body{
+    font-family: Arial;
+    background:#f4f6f8;
+}
+
+/* Container for side-by-side boxes */
+.login-row{
+    display:flex;
+    justify-content:center;
+    gap:30px;
+    margin-top:40px;
+    flex-wrap:wrap;   /* responsive */
+}
+
+.box{
+    width:420px;
+    background:white;
+    padding:25px;
+    border-radius:10px;
+}
+
+select,input,button{
+    width:100%;
+    padding:10px;
+    margin-top:12px;
+}
+
+button{
+    background:#4f46e5;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+
+.hod-btn{
+    background:#dc2626;
+}
+
+.student-btn{
+    background:#16a34a;
+}
+
+hr{
+    margin:25px 0;
+}
+
+/* Center student box */
+.center-box{
+    width:420px;
+    margin:40px auto;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ROW: FACULTY + HOD LOGIN -->
+<div class="login-row">
+
+    <!-- FACULTY LOGIN -->
+    <div class="box">
+        <h3>Faculty Login</h3>
+
+        <form action="/faculty-login" method="POST">
+            <input type="hidden" name="login_type" value="faculty">
+
+            <label>Faculty</label>
+            <select name="faculty_id" required>
+                <option value="">Select Faculty</option>
+                {% for f in faculty %}
+                    {% if f[2] == 'faculty' %}
+                    <option value="{{ f[0] }}">{{ f[1] }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+
+            <label>Password</label>
+            <input type="password" name="password" required>
+
+            <label>Section</label>
+            <select name="section_id" required>
+                <option value="">Select Section</option>
+                {% for s in sections %}
+                <option value="{{ s[0] }}">{{ s[1] }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit">Login & Continue</button>
+        </form>
+    </div>
+
+    <!-- HOD / AHOD LOGIN -->
+    <div class="box">
+        <h3>HOD / AHOD Login</h3>
+
+        <form action="/faculty-login" method="POST">
+            <input type="hidden" name="login_type" value="admin">
+
+            <label>HOD / AHOD</label>
+            <select name="faculty_id" required>
+                <option value="">Select</option>
+                {% for f in faculty %}
+                    {% if f[2] in ['hod','ahod'] %}
+                    <option value="{{ f[0] }}">{{ f[1] }} ({{ f[2]|upper }})</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+
+            
+
+            <label>Password</label>
+            <input type="password" name="password" required>
+
+            <label>Section</label>
+            <select name="section_id" required>
+                <option value="">Select Section</option>
+                {% for s in sections %}
+                <option value="{{ s[0] }}">{{ s[1] }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="hod-btn">Admin Login</button>
+        </form>
+    </div>
+
+</div>
+
+<!-- STUDENT DETAILS -->
+<div class="center-box box">
+    <h3>Student Details</h3>
+    <form action="/student-report" method="GET">
+        <button type="submit" class="student-btn">
+            View Student Details
+        </button>
+    </form>
+</div>
+
+</body>
+</html>

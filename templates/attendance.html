@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Attendance Entry</title>
+
+<style>
+body{font-family:Arial;background:#f4f6f8;}
+.container{padding:20px;}
+
+select,input[type="date"],button{
+    padding:8px;
+    margin:10px 10px 10px 0;
+}
+
+.no-class{
+    color:gray;
+    font-style:italic;
+}
+
+.table-wrapper{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px,1fr));
+    gap:20px;
+    margin-top:20px;
+}
+
+table{
+    border-collapse:collapse;
+    width:100%;
+    background:#fff;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:6px;
+    text-align:center;
+}
+
+th{
+    background:#eef2ff;
+}
+</style>
+</head>
+
+<body>
+
+
+<hr>
+
+<div class="container">
+<h3>Mark Attendance</h3>
+
+<form action="/save" method="POST">
+
+<input type="hidden" name="faculty_id" value="{{ faculty_id }}">
+<input type="hidden" name="section_id" value="{{ section_id }}">
+<input type="hidden" name="attendance_date" id="attendance_date">
+
+<!-- WEEK -->
+<label>Week:</label>
+<select id="weekSelect" name="week_id" onchange="onWeekDayChange()" required>
+{% for i in range(1,21) %}
+<option value="{{ i }}">Week {{ i }}</option>
+{% endfor %}
+</select>
+
+<!-- DAY -->
+<label>Day:</label>
+<select id="daySelect" name="selected_day" onchange="onWeekDayChange()" required>
+<option value="">--Choose Day--</option>
+{% for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] %}
+<option value="{{ d }}">{{ d }}</option>
+{% endfor %}
+</select>
+
+<!-- DATE -->
+<label>Date:</label>
+<input type="date" id="dateInput" onchange="onDateChange()" required>
+
+<div id="dayMessage" class="no-class"></div>
+
+<!-- STUDENTS -->
+<div class="table-wrapper">
+
+{% for s in students %}
+
+    {% if loop.index0 % 10 == 0 %}
+    <table>
+        <tr>
+            <th colspan="2">
+                Students {{ loop.index }} –
+                {{ loop.index + 9 if loop.index + 9 <= students|length else students|length }}
+            </th>
+        </tr>
+        <tr>
+            <th>Roll No</th>
+            <th>Status</th>
+        </tr>
+    {% endif %}
+
+    <tr>
+        <td>{{ s[1] }}</td>
+        <td>
+            <input type="checkbox" name="att_{{ s[0] }}" value="Absent">
+            Absent
+        </td>
+    </tr>
+
+    {% if loop.index % 10 == 0 or loop.last %}
+    </table>
+    {% endif %}
+
+{% endfor %}
+
+</div>
+
+<br>
+<button type="submit" id="saveBtn" disabled>Save Attendance</button>
+</form>
+</div>
+
+<script>
+const classDays = {{ class_days | tojson }};
+const weekDates = {{ week_dates | tojson }};
+const semesterStart = new Date("2026-01-19"); // Monday
+
+function toggleAttendance(disabled){
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+        cb.disabled = disabled;
+        if(disabled) cb.checked = false;
+    });
+    document.getElementById("saveBtn").disabled = disabled;
+}
+
+/* WEEK or DAY changed */
+function onWeekDayChange(){
+    const week = document.getElementById("weekSelect").value;
+    const day = document.getElementById("daySelect").value;
+    const msg = document.getElementById("dayMessage");
+
+    if(day && !classDays.includes(day)){
+        msg.innerText = "No class scheduled on " + day;
+        toggleAttendance(true);
+        document.getElementById("dateInput").value = "";
+        document.getElementById("attendance_date").value = "";
+        return;
+    }
+
+    msg.innerText = "";
+    toggleAttendance(false);
+
+    if(week && day){
+        const [dd, mm, yyyy] = weekDates[week][day].split("/");
+        const isoDate = `${yyyy}-${mm}-${dd}`;
+
+        document.getElementById("dateInput").value = isoDate;
+        document.getElementById("attendance_date").value = weekDates[week][day];
+    }
+}
+
+/* DATE changed manually */
+function onDateChange(){
+    const dateVal = document.getElementById("dateInput").value;
+    if(!dateVal) return;
+
+    const selected = new Date(dateVal);
+    const diffDays = Math.floor((selected - semesterStart) / (1000*60*60*24));
+
+    const week = Math.floor(diffDays / 7) + 1;
+    const dayIndex = selected.getDay() - 1;
+
+    const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const day = days[dayIndex];
+
+    document.getElementById("weekSelect").value = week;
+    document.getElementById("daySelect").value = day;
+
+    onWeekDayChange();
+}
+</script>
+
+</body>
+</html>

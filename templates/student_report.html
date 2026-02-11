@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Student Attendance Report</title>
+<style>
+body{font-family:Arial;background:#f4f6f8;}
+.container{width:800px;margin:40px auto;background:#fff;padding:20px;border-radius:8px;}
+select{padding:8px;margin-right:10px;margin-bottom:10px;}
+table{border-collapse:collapse;width:100%;margin-top:20px;}
+th,td{border:1px solid #ccc;padding:6px;text-align:center;}
+th{background:#eef2ff;}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h3>Student Attendance History</h3>
+
+<!-- Section -->
+<label>Section:</label>
+<select id="sectionSelect" onchange="loadStudents()">
+<option value="">Select Section</option>
+{% for s in sections %}
+<option value="{{ s[0] }}">{{ s[1] }}</option>
+{% endfor %}
+</select>
+
+<!-- Student -->
+<label>Student:</label>
+<select id="studentSelect" onchange="loadAttendance()">
+<option value="">Select Student</option>
+</select>
+
+<br><br>
+
+<!-- Week -->
+<label>Week:</label>
+<select id="weekSelect" onchange="loadAttendance()">
+<option value="">Select Week</option>
+{% for i in range(1,21) %}
+<option value="{{ i }}">Week {{ i }}</option>
+{% endfor %}
+</select>
+
+<!-- Subject -->
+<label>Subject:</label>
+<select id="subjectSelect" onchange="loadAttendance()">
+<option value="All">All</option>
+</select>
+
+<table id="reportTable">
+<tr>
+<th>Date</th>
+<th>Subject</th>
+<th>Status</th>
+</tr>
+</table>
+<br>
+
+<button onclick="downloadExcel()" style="padding:8px;">
+    ⬇ Download as Excel
+</button>
+
+</div>
+
+<script>
+/* Load students based on section */
+function loadStudents(){
+    const sectionId = document.getElementById("sectionSelect").value;
+    const studentSelect = document.getElementById("studentSelect");
+    studentSelect.innerHTML = "<option>Select Student</option>";
+
+    if(!sectionId) return;
+
+    fetch(`/get-students/${sectionId}`)
+    .then(res => res.json())
+    .then(data => {
+        data.students.forEach(s => {
+            studentSelect.innerHTML +=
+              `<option value="${s.id}">${s.roll} - ${s.name}</option>`;
+        });
+    });
+}
+
+/* Load attendance based on student + week + subject */
+function loadAttendance(){
+    const studentId = document.getElementById("studentSelect").value;
+    const weekId = document.getElementById("weekSelect").value;
+    const subject = document.getElementById("subjectSelect").value;
+    const table = document.getElementById("reportTable");
+
+    table.innerHTML = `
+        <tr>
+        <th>Date</th>
+        <th>Subject</th>
+        <th>Status</th>
+        </tr>`;
+
+    if(!studentId || !weekId) return;
+
+    fetch(`/get-student-attendance/${studentId}?week_id=${weekId}&subject=${subject}`)
+    .then(res => res.json())
+    .then(data => {
+        data.attendance.forEach(a => {
+            table.innerHTML += `
+                <tr>
+                <td>${a.date}</td>
+                <td>${a.subject}</td>
+                <td>${a.status}</td>
+                </tr>`;
+        });
+    });
+}
+
+/* Load subjects once */
+fetch("/get-subjects")
+.then(res => res.json())
+.then(data => {
+    const subjectSelect = document.getElementById("subjectSelect");
+    data.subjects.forEach(s => {
+        subjectSelect.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+});
+function downloadExcel(){
+    const studentId = document.getElementById("studentSelect").value;
+    const weekId = document.getElementById("weekSelect").value;
+    const subject = document.getElementById("subjectSelect").value;
+
+    if(!studentId || !weekId){
+        alert("Please select student and week");
+        return;
+    }
+
+    window.location.href =
+        `/download-student-excel?student_id=${studentId}&week_id=${weekId}&subject=${subject}`;
+}
+</script>
+
+</body>
+</html>

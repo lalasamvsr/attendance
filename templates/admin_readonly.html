@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Read-Only Attendance</title>
+<style>
+body{font-family:Arial;background:#f4f6f8;padding:20px;}
+select,input,button{padding:8px;margin:6px;}
+table{border-collapse:collapse;width:100%;background:white;margin-top:15px;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+th{background:#eef2ff;}
+.summary{margin-top:10px;}
+.present{color:green;font-weight:bold;}
+.absent{color:red;font-weight:bold;}
+</style>
+</head>
+
+<body>
+
+<h3>Read-Only Attendance</h3>
+
+<form method="GET">
+
+<label>Faculty:</label>
+<select name="faculty_id" onchange="this.form.submit()">
+<option value="">Select Faculty</option>
+{% for f in faculty_list %}
+<option value="{{ f[0] }}" {% if selected_faculty==f[0] %}selected{% endif %}>
+{{ f[1] }}
+</option>
+{% endfor %}
+</select>
+
+{% if subjects %}
+<label>Subject:</label>
+<select name="subject">
+<option value="">Select Subject</option>
+{% for s in subjects %}
+<option value="{{ s }}" {% if selected_subject==s %}selected{% endif %}>
+{{ s }}
+</option>
+{% endfor %}
+</select>
+{% endif %}
+
+<label>Date:</label>
+<input type="date" name="date" value="{{ selected_date }}">
+
+<button type="submit">View</button>
+
+</form>
+
+{% if report %}
+<div class="summary">
+<span class="present">Present: {{ present_count }}</span>
+&nbsp;&nbsp;
+<span class="absent">Absent: {{ absent_count }}</span>
+</div>
+
+<table>
+<tr>
+<th>Roll No</th>
+<th>Status</th>
+</tr>
+
+{% for r in report %}
+<tr>
+<td>{{ r.roll }}</td>
+<td>{{ r.status }}</td>
+</tr>
+{% endfor %}
+
+</table>
+{% endif %}
+
+<br>
+<a href="/admin-dashboard">⬅ Back</a>
+
+</body>
+</html>

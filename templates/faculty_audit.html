@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Faculty Audit</title>
+<style>
+body{font-family:Arial;background:#f4f6f8;padding:20px;}
+table{border-collapse:collapse;width:100%;background:white;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+th{background:#eef2ff;}
+</style>
+</head>
+<body>
+
+<h3>Faculty Attendance Audit</h3>
+
+<table>
+<tr>
+<th>Date</th>
+<th>Marked By</th>
+<th>Class Faculty</th>
+<th>Section</th>
+</tr>
+
+{% for r in rows %}
+<tr>
+<td>{{ r[0] }}</td>
+<td>{{ r[1] }}</td>
+<td>{{ r[2] }}</td>
+<td>{{ r[3] }}</td>
+</tr>
+{% endfor %}
+
+</table>
+
+<br>
+<a href="/admin-dashboard">⬅ Back</a>
+
+</body>
+</html>

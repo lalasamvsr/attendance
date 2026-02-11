@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Faculty Dashboard</title>
+<style>
+body{
+    font-family: Arial;
+    background:#f4f6f8;
+}
+.container{
+    width:500px;
+    margin:80px auto;
+    background:white;
+    padding:30px;
+    border-radius:10px;
+}
+h2{
+    margin-bottom:20px;
+}
+button{
+    width:100%;
+    padding:12px;
+    margin-top:15px;
+    border:none;
+    color:white;
+    cursor:pointer;
+    font-size:15px;
+    border-radius:6px;
+}
+.mark{ background:#4f46e5; }
+.report{ background:#2563eb; }
+.student{ background:#16a34a; }
+.logout{ background:#dc2626; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Welcome, {{ faculty_name }}</h2>
+<p><b>Section:</b> {{ section_name }}</p>
+
+<form action="/attendance/{{ faculty_id }}/{{ section_id }}">
+    <button class="mark">Mark Attendance</button>
+</form>
+
+<form action="/week-report">
+    <input type="hidden" name="faculty_id" value="{{ faculty_id }}">
+    <input type="hidden" name="section_id" value="{{ section_id }}">
+    <button class="report">View Daily Report</button>
+</form>
+
+<form action="/student-report">
+    <button class="student">View Student Details</button>
+</form>
+
+<form action="/logout">
+    <button class="logout">Logout</button>
+</form>
+
+</div>
+
+</body>
+</html>

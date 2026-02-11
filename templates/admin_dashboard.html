@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Dashboard</title>
+<style>
+body{
+    font-family: Arial;
+    background:#f4f6f8;
+}
+.container{
+    width:650px;
+    margin:60px auto;
+    background:white;
+    padding:30px;
+    border-radius:10px;
+}
+button{
+    width:100%;
+    padding:12px;
+    margin-top:15px;
+    border:none;
+    color:white;
+    cursor:pointer;
+    border-radius:6px;
+    font-size:14px;
+}
+.mark{ background:#4f46e5; }
+.report{ background:#2563eb; }
+.audit{ background:#9333ea; }
+.student{ background:#16a34a; }
+.logout{ background:#dc2626; }
+
+.section{
+    margin-top:25px;
+    border-top:1px solid #ddd;
+    padding-top:15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Admin Dashboard</h2>
+<p><b>Logged in as:</b> {{ admin_name }}</p>
+
+<!-- 🔹 FACULTY FEATURES (FOR AHOD/HOD THEMSELVES) -->
+<div class="section">
+<h3>My Teaching Portal</h3>
+
+<form action="/attendance/{{ faculty_id }}/{{ section_id }}">
+    <button class="mark">Mark My Attendance</button>
+</form>
+
+<form action="/week-report">
+    <input type="hidden" name="faculty_id" value="{{ faculty_id }}">
+    <input type="hidden" name="section_id" value="{{ section_id }}">
+    <button class="report">View My Daily Report</button>
+</form>
+</div>
+
+
+<!-- 🔹 ADMIN FEATURES -->
+<div class="section">
+<h3>Admin Controls</h3>
+
+<form action="/faculty-audit">
+    <button class="audit">View Faculty Attendance Audit</button>
+</form>
+
+<form action="/download-faculty-report">
+    <button class="audit">Download Faculty Audit (Excel)</button>
+</form>
+
+<form action="/admin-attendance">
+    <button class="report">Read-Only Attendance Sheet</button>
+</form>
+
+
+<form action="/student-report">
+    <button class="student">View Student Details</button>
+</form>
+
+</div>
+
+<form action="/logout">
+    <button class="logout">Logout</button>
+</form>
+
+</div>
+
+</body>
+</html>

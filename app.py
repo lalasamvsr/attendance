@@ -151,47 +151,89 @@ def admin_dashboard():
     )
 @app.route('/faculty-audit')
 def faculty_audit():
-    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+    # 🔐 Access Control
+    if 'faculty_id' not in session or session['role'] not in ('hod', 'ahod'):
         return "Access Denied", 403
 
     conn = get_db_connection()
     cur = conn.cursor()
 
     selected_date = request.args.get('date')
-
-    query = """
-        SELECT
-        a.date,
-        f_marker.name AS marked_by,
-        f_marker.role AS marker_role,
-        f_class.name  AS class_faculty,
-        s.section_name
-    FROM attendance a
-    JOIN faculty f_marker ON f_marker.faculty_id = a.marked_by
-    JOIN faculty f_class  ON f_class.faculty_id  = a.faculty_id
-    JOIN sections s       ON s.section_id = a.section_id
-    GROUP BY a.date, f_marker.name, f_marker.role, f_class.name, s.section_name
-    ORDER BY a.date DESC
-    """
-
-    params = []
+    rows = []
+    no_class = False
 
     if selected_date:
-        query += " WHERE a.date = %s"
-        params.append(selected_date)
+        report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
-    query += """
-        GROUP BY a.date, f_marker.name, f_class.name, s.section_name
-        ORDER BY a.date DESC
-    """
+        # 🔎 Check if ANY class scheduled that day
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM class_schedule
+            WHERE day_of_week = %s
+        """, (report_date.strftime("%A"),))
 
-    cur.execute(query, tuple(params))
-    rows = cur.fetchall()
+        class_count = cur.fetchone()[0]
+
+        if class_count == 0:
+            no_class = True
+        else:
+            # 🔍 Fetch audit records for selected date
+            cur.execute("""
+                SELECT
+                    a.date,
+                    f_marker.name AS marked_by,
+                    f_marker.role AS marker_role,
+                    f_class.name  AS class_faculty,
+                    s.section_name
+                FROM attendance a
+                JOIN faculty f_marker 
+                    ON f_marker.faculty_id = a.marked_by
+                JOIN faculty f_class  
+                    ON f_class.faculty_id = a.faculty_id
+                JOIN sections s       
+                    ON s.section_id = a.section_id
+                WHERE a.date = %s
+                GROUP BY a.date, f_marker.name, f_marker.role, 
+                         f_class.name, s.section_name
+                ORDER BY f_class.name
+            """, (report_date,))
+
+            rows = cur.fetchall()
+
+    else:
+        # 🔍 Default → Show latest records
+        cur.execute("""
+            SELECT
+                a.date,
+                f_marker.name AS marked_by,
+                f_marker.role AS marker_role,
+                f_class.name  AS class_faculty,
+                s.section_name
+            FROM attendance a
+            JOIN faculty f_marker 
+                ON f_marker.faculty_id = a.marked_by
+            JOIN faculty f_class  
+                ON f_class.faculty_id = a.faculty_id
+            JOIN sections s       
+                ON s.section_id = a.section_id
+            GROUP BY a.date, f_marker.name, f_marker.role, 
+                     f_class.name, s.section_name
+            ORDER BY a.date DESC
+            LIMIT 50
+        """)
+
+        rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     return render_template(
         "faculty_audit.html",
-        rows=rows
+        rows=rows,
+        selected_date=selected_date,
+        no_class=no_class
     )
+
 
 @app.route('/admin-attendance', methods=['GET'])
 def admin_attendance():
@@ -759,6 +801,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

@@ -5,10 +5,11 @@
 <style>
 body{font-family:Arial;background:#f4f6f8;}
 .container{width:800px;margin:40px auto;background:#fff;padding:20px;border-radius:8px;}
-select{padding:8px;margin-right:10px;margin-bottom:10px;}
+select,input{padding:8px;margin-right:10px;margin-bottom:10px;}
 table{border-collapse:collapse;width:100%;margin-top:20px;}
 th,td{border:1px solid #ccc;padding:6px;text-align:center;}
 th{background:#eef2ff;}
+button{padding:8px;}
 </style>
 </head>
 
@@ -33,34 +34,30 @@ th{background:#eef2ff;}
 
 <br><br>
 
-<!-- Datw -->
+<!-- Date -->
 <label>Date:</label>
 <input type="date" id="dateSelect" onchange="loadAttendance()">
 
-
-<!-- Subject -->
-<label>Subject:</label>
-<select id="subjectSelect" onchange="loadAttendance()">
-<option value="All">All</option>
-</select>
-
 <table id="reportTable">
 <tr>
-<th>Date</th>
-<th>Subject</th>
-<th>Status</th>
+    <th>Period</th>
+    <th>Subject</th>
+    <th>Faculty</th>
+    <th>Status</th>
 </tr>
 </table>
+
 <br>
 
-<button onclick="downloadExcel()" style="padding:8px;">
+<button onclick="downloadExcel()">
     ⬇ Download as Excel
 </button>
 
 </div>
 
 <script>
-/* Load students based on section */
+
+/* Load students */
 function loadStudents(){
     const sectionId = document.getElementById("sectionSelect").value;
     const studentSelect = document.getElementById("studentSelect");
@@ -78,7 +75,7 @@ function loadStudents(){
     });
 }
 
-/* Load attendance based on student + date */
+/* Load attendance */
 function loadAttendance(){
     const studentId = document.getElementById("studentSelect").value;
     const selectedDate = document.getElementById("dateSelect").value;
@@ -97,6 +94,14 @@ function loadAttendance(){
     fetch(`/get-student-attendance/${studentId}?date=${selectedDate}`)
     .then(res => res.json())
     .then(data => {
+        if(data.attendance.length === 0){
+            table.innerHTML += `
+                <tr>
+                    <td colspan="4">No records found</td>
+                </tr>`;
+            return;
+        }
+
         data.attendance.forEach(a => {
             table.innerHTML += `
                 <tr>
@@ -122,10 +127,8 @@ function downloadExcel(){
     window.location.href = 
         `/download-student-excel?student_id=${studentId}&date=${selectedDate}`;
 }
-</script>
 
+</script>
 
 </body>
 </html>
-
-

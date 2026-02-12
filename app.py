@@ -431,39 +431,48 @@ def save():
 @app.route('/week-report')
 def week_report():
 
+    if 'faculty_id' not in session:
+        return redirect(url_for('index'))
+
     conn = get_db_connection()
     cur = conn.cursor()
 
     selected_date = request.args.get('date')
-    subject = request.args.get('subject', 'All')
-    status_filter = request.args.get('filter', 'All')
+    requested_faculty_id = request.args.get('faculty_id', type=int)
 
-    # 🔥 Default to today if not provided
     if not selected_date:
-        selected_date = date.today().strftime("%Y-%m-%d")
+        return render_template("week_report.html", report=None)
 
     report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
+    # 🔐 Decide whose attendance to show
+
+    if session['role'] == 'faculty':
+        faculty_filter = session['faculty_id']
+
+    elif session['role'] in ('hod', 'ahod'):
+
+        # If HOD clicked "My Daily Report"
+        if requested_faculty_id == session['faculty_id'] or not requested_faculty_id:
+            faculty_filter = session['faculty_id']
+        else:
+            # If HOD is using admin filter to view someone else
+            faculty_filter = requested_faculty_id
+
+    else:
+        return "Unauthorized", 403
+
+    # 🔎 Fetch attendance
     query = """
         SELECT s.roll_no, s.name, a.status
         FROM attendance a
         JOIN students s ON s.student_id = a.student_id
         WHERE a.date = %s
+          AND a.faculty_id = %s
+        ORDER BY s.roll_no
     """
-    params = [report_date]
 
-    # Role restriction
-    if session.get('role') == 'faculty':
-        query += " AND a.faculty_id = %s"
-        params.append(session['faculty_id'])
-
-    if status_filter != "All":
-        query += " AND a.status = %s"
-        params.append(status_filter)
-
-    query += " ORDER BY s.roll_no"
-
-    cur.execute(query, tuple(params))
+    cur.execute(query, (report_date, faculty_filter))
     rows = cur.fetchall()
 
     report = [
@@ -471,21 +480,16 @@ def week_report():
         for r in rows
     ]
 
-    # 🔥 Fix counts (also role-based)
-    count_query = """
+    # ✅ Correct Count (filtered by faculty)
+    cur.execute("""
         SELECT
             COUNT(*) FILTER (WHERE status='Present'),
             COUNT(*) FILTER (WHERE status='Absent')
         FROM attendance
         WHERE date = %s
-    """
-    count_params = [report_date]
+          AND faculty_id = %s
+    """, (report_date, faculty_filter))
 
-    if session.get('role') == 'faculty':
-        count_query += " AND faculty_id = %s"
-        count_params.append(session['faculty_id'])
-
-    cur.execute(count_query, tuple(count_params))
     present_count, absent_count = cur.fetchone()
 
     cur.close()
@@ -498,6 +502,7 @@ def week_report():
         present_count=present_count,
         absent_count=absent_count
     )
+
 
 
 
@@ -753,6 +758,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

@@ -704,6 +704,9 @@ def download_student_excel():
         columns=["Period", "Subject", "Faculty", "Status"]
     )
 
+    # ✅ Add Date column
+    df.insert(0, "Date", report_date.strftime("%d-%m-%Y"))
+
     output = io.BytesIO()
     df.to_excel(output, index=False)
     output.seek(0)
@@ -717,6 +720,7 @@ def download_student_excel():
         download_name=f"Student_Attendance_{selected_date}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
 @app.route('/faculty-dashboard')
@@ -749,6 +753,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

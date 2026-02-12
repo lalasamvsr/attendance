@@ -104,6 +104,20 @@ def faculty_login():
     session['role'] = role
     session['section_id'] = section_id
 
+    # 🔎 Check if faculty actually teaches this section
+    cur.execute("""
+    SELECT 1
+    FROM class_schedule
+    WHERE faculty_id=%s AND section_id=%s
+""", (logged_in_id, section_id))
+
+    teaches = cur.fetchone()
+
+    if role == 'faculty' and not teaches:
+      cur.close()
+      conn.close()
+      return "You are not assigned to this section.", 403
+
     # 🔀 Redirect properly
     if role in ('hod','ahod'):
       return redirect(url_for('admin_dashboard'))
@@ -147,14 +161,17 @@ def faculty_audit():
 
     query = """
         SELECT
-            a.date,
-            f_marker.name AS marked_by,
-            f_class.name  AS class_faculty,
-            s.section_name
-        FROM attendance a
-        JOIN faculty f_marker ON f_marker.faculty_id = a.marked_by
-        JOIN faculty f_class  ON f_class.faculty_id  = a.faculty_id
-        JOIN sections s       ON s.section_id = a.section_id
+        a.date,
+        f_marker.name AS marked_by,
+        f_marker.role AS marker_role,
+        f_class.name  AS class_faculty,
+        s.section_name
+    FROM attendance a
+    JOIN faculty f_marker ON f_marker.faculty_id = a.marked_by
+    JOIN faculty f_class  ON f_class.faculty_id  = a.faculty_id
+    JOIN sections s       ON s.section_id = a.section_id
+    GROUP BY a.date, f_marker.name, f_marker.role, f_class.name, s.section_name
+    ORDER BY a.date DESC
     """
 
     params = []
@@ -329,7 +346,9 @@ def attendance(faculty_id, section_id):
 
 @app.route('/save', methods=['POST'])
 def save():
-    if session['role'] in ('hod','ahod'):
+
+    # 🔐 Admins cannot mark attendance
+    if session.get('role') in ('hod', 'ahod'):
         return "Admins cannot mark attendance", 403
 
     conn = get_db_connection()
@@ -340,42 +359,71 @@ def save():
     week_id = int(request.form['week_id'])
     attendance_date = request.form['attendance_date']
 
+    # Convert DD/MM/YYYY → date
     class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
 
+    # 🔎 Detect if faculty teaches elective group (GT/DF type)
     cur.execute("""
-        SELECT student_id
-        FROM students
-        WHERE section_id=%s
-    """, (section_id,))
+        SELECT DISTINCT group_id
+        FROM class_schedule
+        WHERE faculty_id=%s AND section_id=%s AND group_id IS NOT NULL
+    """, (faculty_id, section_id))
+
+    row = cur.fetchone()
+    faculty_group_id = row[0] if row else None
+
+    # 📚 Load correct students
+    if faculty_group_id:
+        # Only students of that group
+        cur.execute("""
+            SELECT student_id
+            FROM students
+            WHERE section_id=%s AND group_id=%s
+        """, (section_id, faculty_group_id))
+    else:
+        # Whole section
+        cur.execute("""
+            SELECT student_id
+            FROM students
+            WHERE section_id=%s
+        """, (section_id,))
+
     students = cur.fetchall()
 
+    # 📝 Insert / Update attendance
     for (student_id,) in students:
+
         status = "Absent" if f"att_{student_id}" in request.form else "Present"
 
         cur.execute("""
-    INSERT INTO attendance
-    (student_id, faculty_id, section_id, week_id, date, status, marked_by)
-    VALUES (%s,%s,%s,%s,%s,%s,%s)
-    ON CONFLICT (student_id, date, faculty_id, section_id)
-    DO UPDATE SET
-        status = EXCLUDED.status,
-        marked_by = EXCLUDED.marked_by
-""", (
-    student_id,
-    faculty_id,
-    section_id,
-    week_id,
-    class_date,
-    status,
-    session['faculty_id']
-))
-
+            INSERT INTO attendance
+            (student_id, faculty_id, section_id, week_id, date, status, marked_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (student_id, date, faculty_id, section_id)
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                marked_by = EXCLUDED.marked_by
+        """, (
+            student_id,
+            faculty_id,
+            section_id,
+            week_id,
+            class_date,
+            status,
+            session['faculty_id']   # Who actually marked
+        ))
 
     conn.commit()
     cur.close()
     conn.close()
 
-    return redirect(url_for('week_report', week_id=week_id))
+    # 🔁 Redirect to report and auto-show that date
+    return redirect(url_for(
+        'week_report',
+        date=class_date.strftime("%Y-%m-%d")
+    ))
+
+
 
 
 
@@ -390,8 +438,9 @@ def week_report():
     subject = request.args.get('subject', 'All')
     status_filter = request.args.get('filter', 'All')
 
+    # 🔥 Default to today if not provided
     if not selected_date:
-        return render_template("week_report.html", report=None)
+        selected_date = date.today().strftime("%Y-%m-%d")
 
     report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
@@ -403,7 +452,7 @@ def week_report():
     """
     params = [report_date]
 
-    # 🔐 Role-based filtering
+    # Role restriction
     if session.get('role') == 'faculty':
         query += " AND a.faculty_id = %s"
         params.append(session['faculty_id'])
@@ -422,14 +471,21 @@ def week_report():
         for r in rows
     ]
 
-    cur.execute("""
+    # 🔥 Fix counts (also role-based)
+    count_query = """
         SELECT
             COUNT(*) FILTER (WHERE status='Present'),
             COUNT(*) FILTER (WHERE status='Absent')
         FROM attendance
         WHERE date = %s
-    """, (report_date,))
+    """
+    count_params = [report_date]
 
+    if session.get('role') == 'faculty':
+        count_query += " AND faculty_id = %s"
+        count_params.append(session['faculty_id'])
+
+    cur.execute(count_query, tuple(count_params))
     present_count, absent_count = cur.fetchone()
 
     cur.close()
@@ -442,6 +498,7 @@ def week_report():
         present_count=present_count,
         absent_count=absent_count
     )
+
 
 
 
@@ -492,44 +549,44 @@ def get_student_attendance(student_id):
     conn = get_db_connection()
     cur = conn.cursor()
 
+    selected_date = request.args.get('date')
 
-    week_id = request.args.get('week_id', type=int)
-    subject = request.args.get('subject', 'All')
-
-    if not week_id:
+    if not selected_date:
         return {"attendance": []}
 
-    semester_start = date(2026, 1, 19)
-    week_start = semester_start + timedelta(weeks=week_id - 1)
-    week_end = week_start + timedelta(days=5)
+    report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
     query = """
-        SELECT a.date, cs.subject, a.status
+        SELECT 
+            cs.period_no,
+            cs.subject,
+            f.name AS faculty_name,
+            a.status
         FROM attendance a
         JOIN class_schedule cs
           ON cs.section_id = a.section_id
          AND cs.faculty_id = a.faculty_id
          AND cs.day_of_week = TO_CHAR(a.date, 'FMDay')
+        JOIN faculty f
+          ON f.faculty_id = cs.faculty_id
         WHERE a.student_id = %s
-          AND a.date BETWEEN %s AND %s
+          AND a.date = %s
+        ORDER BY cs.period_no
     """
-    params = [student_id, week_start, week_end]
 
-    if subject != "All":
-        query += " AND cs.subject = %s"
-        params.append(subject)
-
-    query += " ORDER BY a.date"
-
-    cur.execute(query, tuple(params))
+    cur.execute(query, (student_id, report_date))
     rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     return {
         "attendance": [
             {
-                "date": r[0].strftime("%d-%m-%Y"),
+                "period": r[0],
                 "subject": r[1],
-                "status": r[2]
+                "faculty": r[2],
+                "status": r[3]
             }
             for r in rows
         ]
@@ -692,6 +749,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

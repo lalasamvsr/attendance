@@ -2,15 +2,62 @@
 <html>
 <head>
 <title>Read-Only Attendance</title>
+
 <style>
-body{font-family:Arial;background:#f4f6f8;padding:20px;}
-select,input,button{padding:8px;margin:6px;}
-table{border-collapse:collapse;width:100%;background:white;margin-top:15px;}
-th,td{border:1px solid #ccc;padding:8px;text-align:center;}
-th{background:#eef2ff;}
-.summary{margin-top:10px;}
-.present{color:green;font-weight:bold;}
-.absent{color:red;font-weight:bold;}
+body{
+    font-family:Arial;
+    background:#f4f6f8;
+    padding:20px;
+}
+
+select,input,button{
+    padding:8px;
+    margin:6px;
+}
+
+table{
+    border-collapse:collapse;
+    width:100%;
+    background:white;
+    margin-top:15px;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+
+th{
+    background:#eef2ff;
+}
+
+.summary{
+    margin-top:10px;
+}
+
+.present{
+    color:green;
+    font-weight:bold;
+}
+
+.absent{
+    color:red;
+    font-weight:bold;
+}
+
+.message{
+    margin-top:15px;
+    font-weight:bold;
+}
+
+.no-class{
+    color:red;
+}
+
+.not-marked{
+    color:orange;
+}
 </style>
 </head>
 
@@ -49,10 +96,25 @@ th{background:#eef2ff;}
 
 </form>
 
-{% if report %}
+<!-- 🔴 No Class Scheduled -->
+{% if no_class %}
+<div class="message no-class">
+No class scheduled on this date.
+</div>
+{% endif %}
+
+<!-- 🟡 Attendance Not Marked -->
+{% if not_marked %}
+<div class="message not-marked">
+Class scheduled but attendance not marked yet.
+</div>
+{% endif %}
+
+<!-- ✅ Valid Report -->
+{% if report and not no_class and not not_marked %}
 <div class="summary">
 <span class="present">Present: {{ present_count }}</span>
-&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp;
 <span class="absent">Absent: {{ absent_count }}</span>
 </div>
 

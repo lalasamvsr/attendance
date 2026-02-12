@@ -664,60 +664,58 @@ def download_faculty_report():
     )
 @app.route('/download-student-excel')
 def download_student_excel():
+
     conn = get_db_connection()
     cur = conn.cursor()
 
-
     student_id = request.args.get('student_id', type=int)
-    week_id = request.args.get('week_id', type=int)
-    subject = request.args.get('subject', 'All')
+    selected_date = request.args.get('date')
 
-    if not student_id or not week_id:
+    if not student_id or not selected_date:
         return "Missing parameters", 400
 
-    semester_start = date(2026, 1, 19)
-    week_start = semester_start + timedelta(weeks=week_id - 1)
-    week_end = week_start + timedelta(days=5)
+    report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
     query = """
-        SELECT a.date, cs.subject, a.status
+        SELECT 
+            cs.period_no,
+            cs.subject,
+            f.name,
+            a.status
         FROM attendance a
         JOIN class_schedule cs
           ON cs.section_id = a.section_id
          AND cs.faculty_id = a.faculty_id
          AND cs.day_of_week = TO_CHAR(a.date, 'FMDay')
+        JOIN faculty f
+          ON f.faculty_id = cs.faculty_id
         WHERE a.student_id = %s
-          AND a.date BETWEEN %s AND %s
+          AND a.date = %s
+        ORDER BY cs.period_no
     """
-    params = [student_id, week_start, week_end]
 
-    if subject != "All":
-        query += " AND cs.subject = %s"
-        params.append(subject)
-
-    query += " ORDER BY a.date"
-
-    cur.execute(query, tuple(params))
+    cur.execute(query, (student_id, report_date))
     rows = cur.fetchall()
 
     df = pd.DataFrame(
         rows,
-        columns=["Date", "Subject", "Status"]
+        columns=["Period", "Subject", "Faculty", "Status"]
     )
-
-    df["Date"] = df["Date"].apply(lambda d: d.strftime("%d-%m-%Y"))
-
 
     output = io.BytesIO()
     df.to_excel(output, index=False)
     output.seek(0)
 
+    cur.close()
+    conn.close()
+
     return send_file(
         output,
         as_attachment=True,
-        download_name=f"Student_Attendance_Week_{week_id}.xlsx",
+        download_name=f"Student_Attendance_{selected_date}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 @app.route('/faculty-dashboard')
 def faculty_dashboard():
@@ -749,6 +747,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

@@ -2,38 +2,114 @@
 <html>
 <head>
 <title>Faculty Audit</title>
+
 <style>
-body{font-family:Arial;background:#f4f6f8;padding:20px;}
-table{border-collapse:collapse;width:100%;background:white;}
-th,td{border:1px solid #ccc;padding:8px;text-align:center;}
-th{background:#eef2ff;}
+body{
+    font-family:Arial;
+    background:#f4f6f8;
+    padding:20px;
+}
+
+.container{
+    max-width:1000px;
+    margin:auto;
+    background:white;
+    padding:20px;
+    border-radius:8px;
+}
+
+input,button{
+    padding:8px;
+    margin:10px 10px 10px 0;
+}
+
+button{
+    background:#4f46e5;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+
+table{
+    border-collapse:collapse;
+    width:100%;
+    margin-top:20px;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+
+th{
+    background:#eef2ff;
+}
+
+.notice{
+    margin-top:20px;
+    font-weight:bold;
+    color:red;
+}
 </style>
 </head>
+
 <body>
+
+<div class="container">
 
 <h3>Faculty Attendance Audit</h3>
 
+<!-- 🔎 Date Filter -->
+<form method="GET" action="/faculty-audit">
+    <label>Select Date:</label>
+    <input type="date" name="date" value="{{ selected_date }}">
+    <button type="submit">Filter</button>
+</form>
+
+<!-- ❌ No class scheduled -->
+{% if no_class %}
+    <div class="notice">
+        No class scheduled on this date.
+    </div>
+{% endif %}
+
+<!-- 📊 Audit Table -->
+{% if rows and not no_class %}
 <table>
 <tr>
 <th>Date</th>
 <th>Marked By</th>
+<th>Role</th>
 <th>Class Faculty</th>
 <th>Section</th>
 </tr>
 
 {% for r in rows %}
 <tr>
-<td>{{ r[0] }}</td>
+<td>{{ r[0].strftime("%d-%m-%Y") if r[0] }}</td>
 <td>{{ r[1] }}</td>
-<td>{{ r[2] }}</td>
+<td>{{ r[2] | upper }}</td>
 <td>{{ r[3] }}</td>
+<td>{{ r[4] }}</td>
 </tr>
 {% endfor %}
 
 </table>
+{% endif %}
+
+<!-- ⚠ No attendance marked -->
+{% if selected_date and not rows and not no_class %}
+    <div class="notice">
+        No attendance was marked on this date.
+    </div>
+{% endif %}
 
 <br>
-<a href="/admin-dashboard">⬅ Back</a>
+<a href="/admin-dashboard">⬅ Back to Dashboard</a>
+
+</div>
 
 </body>
 </html>
+

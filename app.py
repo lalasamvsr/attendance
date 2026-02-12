@@ -427,7 +427,7 @@ def save():
 
 
 
-# ================= WEEK REPORT =================
+# ================= WEEK REPORT ================= 
 @app.route('/week-report')
 def week_report():
 
@@ -502,6 +502,7 @@ def week_report():
         present_count=present_count,
         absent_count=absent_count
     )
+
 
 
 
@@ -758,6 +759,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

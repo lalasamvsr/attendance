@@ -33,14 +33,10 @@ th{background:#eef2ff;}
 
 <br><br>
 
-<!-- Week -->
-<label>Week:</label>
-<select id="weekSelect" onchange="loadAttendance()">
-<option value="">Select Week</option>
-{% for i in range(1,21) %}
-<option value="{{ i }}">Week {{ i }}</option>
-{% endfor %}
-</select>
+<!-- Datw -->
+<label>Date:</label>
+<input type="date" id="dateSelect" onchange="loadAttendance()">
+
 
 <!-- Subject -->
 <label>Subject:</label>
@@ -85,32 +81,34 @@ function loadStudents(){
 /* Load attendance based on student + week + subject */
 function loadAttendance(){
     const studentId = document.getElementById("studentSelect").value;
-    const weekId = document.getElementById("weekSelect").value;
-    const subject = document.getElementById("subjectSelect").value;
+    const selectedDate = document.getElementById("dateSelect").value;
     const table = document.getElementById("reportTable");
 
     table.innerHTML = `
         <tr>
-        <th>Date</th>
-        <th>Subject</th>
-        <th>Status</th>
+            <th>Period</th>
+            <th>Subject</th>
+            <th>Faculty</th>
+            <th>Status</th>
         </tr>`;
 
-    if(!studentId || !weekId) return;
+    if(!studentId || !selectedDate) return;
 
-    fetch(`/get-student-attendance/${studentId}?week_id=${weekId}&subject=${subject}`)
+    fetch(`/get-student-date-attendance/${studentId}?date=${selectedDate}`)
     .then(res => res.json())
     .then(data => {
         data.attendance.forEach(a => {
             table.innerHTML += `
                 <tr>
-                <td>${a.date}</td>
-                <td>${a.subject}</td>
-                <td>${a.status}</td>
+                    <td>${a.period}</td>
+                    <td>${a.subject}</td>
+                    <td>${a.faculty}</td>
+                    <td>${a.status}</td>
                 </tr>`;
         });
     });
 }
+
 
 /* Load subjects once */
 fetch("/get-subjects")
@@ -123,13 +121,17 @@ fetch("/get-subjects")
 });
 function downloadExcel(){
     const studentId = document.getElementById("studentSelect").value;
-    const weekId = document.getElementById("weekSelect").value;
-    const subject = document.getElementById("subjectSelect").value;
+    const selectedDate = document.getElementById("dateSelect").value;
 
-    if(!studentId || !weekId){
-        alert("Please select student and week");
+    if(!studentId || !selectedDate){
+        alert("Please select student and date");
         return;
     }
+
+    window.location.href = 
+        `/download-student-excel?student_id=${studentId}&date=${selectedDate}`;
+}
+
 
     window.location.href =
         `/download-student-excel?student_id=${studentId}&week_id=${weekId}&subject=${subject}`;
@@ -138,3 +140,4 @@ function downloadExcel(){
 
 </body>
 </html>
+

@@ -234,7 +234,6 @@ def faculty_audit():
         no_class=no_class
     )
 
-
 @app.route('/admin-attendance', methods=['GET'])
 def admin_attendance():
     if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
@@ -247,7 +246,7 @@ def admin_attendance():
     selected_subject = request.args.get('subject')
     selected_date = request.args.get('date')
 
-    # Load all faculty for dropdown
+    # Load faculty dropdown
     cur.execute("""
         SELECT faculty_id, name
         FROM faculty
@@ -256,8 +255,12 @@ def admin_attendance():
     """)
     faculty_list = cur.fetchall()
 
-    # Load subjects for selected faculty
     subjects = []
+    report = []
+    present_count = absent_count = None
+    no_class = False
+    not_marked = False
+
     if selected_faculty:
         cur.execute("""
             SELECT DISTINCT subject
@@ -267,41 +270,56 @@ def admin_attendance():
         """, (selected_faculty,))
         subjects = [r[0] for r in cur.fetchall()]
 
-    report = []
-    present_count = absent_count = None
-
     if selected_faculty and selected_subject and selected_date:
+
         report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+        day_name = report_date.strftime("%A")  # Monday, Tuesday etc
 
+        # 🔍 Check if class scheduled that day
         cur.execute("""
-            SELECT s.roll_no, a.status
-            FROM attendance a
-            JOIN students s ON s.student_id = a.student_id
-            WHERE a.faculty_id = %s
-              AND a.date = %s
-              AND EXISTS (
-                    SELECT 1 FROM class_schedule cs
-                    WHERE cs.faculty_id = a.faculty_id
-                      AND cs.section_id = a.section_id
-                      AND cs.subject = %s
-              )
-            ORDER BY s.roll_no
-        """, (selected_faculty, report_date, selected_subject))
-
-        rows = cur.fetchall()
-
-        report = [{"roll": r[0], "status": r[1]} for r in rows]
-
-        cur.execute("""
-            SELECT
-                COUNT(*) FILTER (WHERE status='Present'),
-                COUNT(*) FILTER (WHERE status='Absent')
-            FROM attendance
+            SELECT 1
+            FROM class_schedule
             WHERE faculty_id=%s
-              AND date=%s
-        """, (selected_faculty, report_date))
+              AND subject=%s
+              AND day_of_week=%s
+            LIMIT 1
+        """, (selected_faculty, selected_subject, day_name))
 
-        present_count, absent_count = cur.fetchone()
+        class_exists = cur.fetchone()
+
+        if not class_exists:
+            no_class = True
+        else:
+            # 🔍 Fetch attendance
+            cur.execute("""
+                SELECT s.roll_no, a.status
+                FROM attendance a
+                JOIN students s ON s.student_id = a.student_id
+                WHERE a.faculty_id=%s
+                  AND a.date=%s
+                ORDER BY s.roll_no
+            """, (selected_faculty, report_date))
+
+            rows = cur.fetchall()
+
+            if not rows:
+                not_marked = True
+            else:
+                report = [{"roll": r[0], "status": r[1]} for r in rows]
+
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE status='Present'),
+                        COUNT(*) FILTER (WHERE status='Absent')
+                    FROM attendance
+                    WHERE faculty_id=%s
+                      AND date=%s
+                """, (selected_faculty, report_date))
+
+                present_count, absent_count = cur.fetchone()
+
+    cur.close()
+    conn.close()
 
     return render_template(
         "admin_readonly.html",
@@ -312,8 +330,11 @@ def admin_attendance():
         selected_subject=selected_subject,
         selected_date=selected_date,
         present_count=present_count,
-        absent_count=absent_count
+        absent_count=absent_count,
+        no_class=no_class,
+        not_marked=not_marked
     )
+
 
 
 
@@ -801,6 +822,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

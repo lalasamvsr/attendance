@@ -64,7 +64,7 @@ th{background:#eef2ff;}
 function loadStudents(){
     const sectionId = document.getElementById("sectionSelect").value;
     const studentSelect = document.getElementById("studentSelect");
-    studentSelect.innerHTML = "<option>Select Student</option>";
+    studentSelect.innerHTML = "<option value=''>Select Student</option>";
 
     if(!sectionId) return;
 
@@ -78,7 +78,7 @@ function loadStudents(){
     });
 }
 
-/* Load attendance based on student + week + subject */
+/* Load attendance based on student + date */
 function loadAttendance(){
     const studentId = document.getElementById("studentSelect").value;
     const selectedDate = document.getElementById("dateSelect").value;
@@ -94,7 +94,7 @@ function loadAttendance(){
 
     if(!studentId || !selectedDate) return;
 
-    fetch(`/get-student-date-attendance/${studentId}?date=${selectedDate}`)
+    fetch(`/get-student-attendance/${studentId}?date=${selectedDate}`)
     .then(res => res.json())
     .then(data => {
         data.attendance.forEach(a => {
@@ -109,16 +109,7 @@ function loadAttendance(){
     });
 }
 
-
-/* Load subjects once */
-fetch("/get-subjects")
-.then(res => res.json())
-.then(data => {
-    const subjectSelect = document.getElementById("subjectSelect");
-    data.subjects.forEach(s => {
-        subjectSelect.innerHTML += `<option value="${s}">${s}</option>`;
-    });
-});
+/* Download Excel */
 function downloadExcel(){
     const studentId = document.getElementById("studentSelect").value;
     const selectedDate = document.getElementById("dateSelect").value;
@@ -131,13 +122,10 @@ function downloadExcel(){
     window.location.href = 
         `/download-student-excel?student_id=${studentId}&date=${selectedDate}`;
 }
-
-
-    window.location.href =
-        `/download-student-excel?student_id=${studentId}&week_id=${weekId}&subject=${subject}`;
-}
 </script>
+
 
 </body>
 </html>
+
 

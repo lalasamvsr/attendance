@@ -512,6 +512,8 @@ def student_report():
 
     cur.execute("SELECT section_id, section_name FROM sections")
     sections = cur.fetchall()
+    cur.close()
+    conn.close()
     return render_template("student_report.html", sections=sections)
 
 
@@ -747,6 +749,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

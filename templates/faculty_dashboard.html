@@ -8,23 +8,23 @@ body{
     background:#f4f6f8;
 }
 .container{
-    width:500px;
-    margin:80px auto;
+    width:600px;
+    margin:60px auto;
     background:white;
     padding:30px;
     border-radius:10px;
 }
 h2{
-    margin-bottom:20px;
+    margin-bottom:10px;
 }
 button{
     width:100%;
-    padding:12px;
-    margin-top:15px;
+    padding:10px;
+    margin-top:10px;
     border:none;
     color:white;
     cursor:pointer;
-    font-size:15px;
+    font-size:14px;
     border-radius:6px;
 }
 .mark{ background:#4f46e5; }
@@ -33,6 +33,22 @@ button{
 .daily{ background:#000000; }
 .logout{ background:#dc2626; }
 
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+}
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+th{
+    background:#eef2ff;
+}
+.class-box{
+    margin-bottom:10px;
+}
 </style>
 </head>
 
@@ -48,43 +64,41 @@ button{
 <h3>Today's Classes ({{ today }})</h3>
 
 {% if today_classes %}
-<table style="width:100%;border-collapse:collapse;">
+
+<table>
 <tr>
-<th style="border:1px solid #ccc;padding:8px;">Period</th>
-<th style="border:1px solid #ccc;padding:8px;">Subject</th>
+<th>Period</th>
+<th>Subject</th>
+<th>Action</th>
 </tr>
 
 {% for c in today_classes %}
 <tr>
-<td style="border:1px solid #ccc;padding:8px;text-align:center;">
-{{ c[2] }}
-</td>
-<td style="border:1px solid #ccc;padding:8px;text-align:center;">
-{{ c[1] }}
+<td>{{ c.period_no }}</td>
+<td>{{ c.subject }}</td>
+<td>
+    <form action="/attendance/{{ c.schedule_id }}" method="GET">
+        <button class="mark">Mark Attendance</button>
+    </form>
 </td>
 </tr>
 {% endfor %}
 </table>
+
 {% else %}
 <p style="color:red;">No classes scheduled today.</p>
 {% endif %}
 
 <hr>
 
-
-<form action="/attendance/{{ faculty_id }}/{{ section_id }}">
-    <button class="mark">Mark Attendance</button>
-</form>
-
 <form action="/week-report">
-    <input type="hidden" name="faculty_id" value="{{ faculty_id }}">
-    <input type="hidden" name="section_id" value="{{ section_id }}">
     <button class="report">View Daily Report</button>
 </form>
 
 <form action="/student-report">
     <button class="student">View Student Details</button>
 </form>
+
 <form action="/daily-summary">
     <button class="daily">📊 View Daily Class Summary</button>
 </form>
@@ -97,8 +111,3 @@ button{
 
 </body>
 </html>
-
-
-
-
-

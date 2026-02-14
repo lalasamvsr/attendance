@@ -817,11 +817,14 @@ def faculty_dashboard():
     )
 @app.route('/daily-summary')
 def daily_summary():
+
+    if 'faculty_id' not in session:
+        return redirect(url_for('index'))
+
     conn = get_db_connection()
     cur = conn.cursor()
 
     selected_date = request.args.get('date')
-
     summary = []
 
     if selected_date:
@@ -862,13 +865,19 @@ def daily_summary():
     cur.close()
     conn.close()
 
+    # Role-based back button
+    if session.get("role") == "faculty":
+        back_url = url_for("faculty_dashboard")
+    else:
+        back_url = url_for("admin_dashboard")
+
     return render_template(
-    "daily_summary.html",
-    report=report,
-    present_count=present_count,
-    absent_count=absent_count,
-    role=session.get("role")
-)
+        "daily_summary.html",
+        summary=summary,
+        selected_date=selected_date,
+        back_url=back_url
+    )
+
 
 
 @app.route('/logout')
@@ -878,5 +887,6 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 

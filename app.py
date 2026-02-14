@@ -815,6 +815,62 @@ def faculty_dashboard():
         section_id=session['section_id'],
         section_name=section_name
     )
+    @app.route('/daily-summary')
+def daily_summary():
+    if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    selected_date = request.args.get('date')
+
+    summary = []
+
+    if selected_date:
+        report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+
+        cur.execute("""
+            SELECT 
+                f.name AS faculty_name,
+                cs.subject,
+                s.section_name,
+                COUNT(*) FILTER (WHERE a.status='Present') AS present_count,
+                COUNT(*) FILTER (WHERE a.status='Absent') AS absent_count
+            FROM attendance a
+            JOIN faculty f ON f.faculty_id = a.faculty_id
+            JOIN sections s ON s.section_id = a.section_id
+            JOIN class_schedule cs
+              ON cs.faculty_id = a.faculty_id
+             AND cs.section_id = a.section_id
+             AND cs.day_of_week = TO_CHAR(a.date, 'FMDay')
+            WHERE a.date = %s
+            GROUP BY f.name, cs.subject, s.section_name
+            ORDER BY s.section_name, f.name
+        """, (report_date,))
+
+        rows = cur.fetchall()
+
+        summary = [
+            {
+                "faculty": r[0],
+                "subject": r[1],
+                "section": r[2],
+                "present": r[3],
+                "absent": r[4]
+            }
+            for r in rows
+        ]
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "daily_summary.html",
+        summary=summary,
+        selected_date=selected_date
+    )
+
 @app.route('/logout')
 def logout():
     session.clear()
@@ -822,6 +878,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

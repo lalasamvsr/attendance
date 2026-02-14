@@ -46,11 +46,7 @@ th{background:#eef2ff;}
 {% endif %}
 
 <br>
-{% if role == 'faculty' %}
-    <a href="/faculty-dashboard">⬅ Back</a>
-{% elif role in ['hod','ahod'] %}
-    <a href="/admin-dashboard">⬅ Back</a>
-{% endif %}
+<a href="{{ back_url }}">⬅ Back</a>
 
 
 </body>

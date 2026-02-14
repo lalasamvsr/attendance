@@ -794,27 +794,60 @@ def download_student_excel():
 
 @app.route('/faculty-dashboard')
 def faculty_dashboard():
+
     if 'faculty_id' not in session or session['role'] != 'faculty':
         return "Access Denied", 403
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT name FROM faculty WHERE faculty_id=%s",
-                (session['faculty_id'],))
+    faculty_id = session['faculty_id']
+    section_id = session['section_id']
+
+    # Get faculty name
+    cur.execute("""
+        SELECT name
+        FROM faculty
+        WHERE faculty_id = %s
+    """, (faculty_id,))
     faculty_name = cur.fetchone()[0]
 
-    cur.execute("SELECT section_name FROM sections WHERE section_id=%s",
-                (session['section_id'],))
+    # Get section name
+    cur.execute("""
+        SELECT section_name
+        FROM sections
+        WHERE section_id = %s
+    """, (section_id,))
     section_name = cur.fetchone()[0]
+
+    # 🔵 NEW: Get today's scheduled classes
+    today = date.today()
+    today_day = today.strftime("%A")   # Monday, Tuesday...
+
+    cur.execute("""
+        SELECT schedule_id, subject, period_no
+        FROM class_schedule
+        WHERE faculty_id = %s
+          AND section_id = %s
+          AND day_of_week = %s
+        ORDER BY period_no
+    """, (faculty_id, section_id, today_day))
+
+    today_classes = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     return render_template(
         "faculty_dashboard.html",
         faculty_name=faculty_name,
-        faculty_id=session['faculty_id'],
-        section_id=session['section_id'],
-        section_name=section_name
+        faculty_id=faculty_id,
+        section_id=section_id,
+        section_name=section_name,
+        today=today,
+        today_classes=today_classes
     )
+
 @app.route('/daily-summary')
 def daily_summary():
 
@@ -887,6 +920,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

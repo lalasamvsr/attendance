@@ -8,14 +8,11 @@ body{
     background:#f4f6f8;
 }
 .container{
-    width:600px;
-    margin:60px auto;
+    width:650px;
+    margin:50px auto;
     background:white;
     padding:30px;
     border-radius:10px;
-}
-h2{
-    margin-bottom:10px;
 }
 button{
     width:100%;
@@ -46,8 +43,8 @@ th,td{
 th{
     background:#eef2ff;
 }
-.class-box{
-    margin-bottom:10px;
+.section{
+    margin-bottom:25px;
 }
 </style>
 </head>
@@ -61,10 +58,10 @@ th{
 
 <hr>
 
+<div class="section">
 <h3>Today's Classes ({{ today }})</h3>
 
 {% if today_classes %}
-
 <table>
 <tr>
 <th>Period</th>
@@ -77,17 +74,29 @@ th{
 <td>{{ c.period_no }}</td>
 <td>{{ c.subject }}</td>
 <td>
-    <form action="/attendance/{{ c.schedule_id }}" method="GET">
-        <button class="mark">Mark Attendance</button>
-    </form>
+<form action="/attendance/{{ c.schedule_id }}">
+<button class="mark">Mark</button>
+</form>
 </td>
 </tr>
 {% endfor %}
 </table>
-
 {% else %}
 <p style="color:red;">No classes scheduled today.</p>
 {% endif %}
+</div>
+
+<hr>
+
+<div class="section">
+<h3>Mark Attendance for Other Date</h3>
+
+<form action="/load-schedule" method="GET">
+    <label>Select Date:</label>
+    <input type="date" name="date" required>
+    <button class="mark">Load Scheduled Classes</button>
+</form>
+</div>
 
 <hr>
 

@@ -416,81 +416,6 @@ def attendance(schedule_id):
         week_dates=week_dates
     )
 
-@app.route('/save', methods=['POST'])
-def save():
-
-    if session.get('role') in ('hod','ahod'):
-        return "Admins cannot mark attendance", 403
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    faculty_id = int(request.form['faculty_id'])
-    section_id = int(request.form['section_id'])
-    schedule_id = int(request.form['schedule_id'])
-    week_id = int(request.form['week_id'])
-    attendance_date = request.form['attendance_date']
-
-    class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
-
-    # 🔍 Get group_id from schedule
-    cur.execute("""
-        SELECT group_id
-        FROM class_schedule
-        WHERE schedule_id=%s
-    """, (schedule_id,))
-    row = cur.fetchone()
-    group_id = row[0] if row else None
-
-    # 📚 Load correct students
-    if group_id:
-        cur.execute("""
-            SELECT student_id
-            FROM students
-            WHERE section_id=%s AND group_id=%s
-        """, (section_id, group_id))
-    else:
-        cur.execute("""
-            SELECT student_id
-            FROM students
-            WHERE section_id=%s
-        """, (section_id,))
-
-    students = cur.fetchall()
-
-    # 📝 Insert attendance
-    for (student_id,) in students:
-
-        status = "Absent" if f"att_{student_id}" in request.form else "Present"
-
-        cur.execute("""
-            INSERT INTO attendance
-            (student_id, faculty_id, section_id, schedule_id,
-             week_id, date, status, marked_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (student_id, date, schedule_id)
-            DO UPDATE SET
-                status = EXCLUDED.status,
-                marked_by = EXCLUDED.marked_by
-        """, (
-            student_id,
-            faculty_id,
-            section_id,
-            schedule_id,
-            week_id,
-            class_date,
-            status,
-            session['faculty_id']
-        ))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for(
-        'week_report',
-        date=class_date.strftime("%Y-%m-%d")
-    ))
 
 # ================= WEEK REPORT ================= 
 @app.route('/week-report')
@@ -965,6 +890,86 @@ def load_schedule():
         selected_date=selected_date
     )
 
+@app.route('/save', methods=['POST'])
+def save():
+
+    # 🔐 Only faculty can mark
+    if 'faculty_id' not in session or session.get('role') != 'faculty':
+        return "Access Denied", 403
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    schedule_id = int(request.form['schedule_id'])
+    week_id = int(request.form['week_id'])
+    attendance_date = request.form['attendance_date']
+
+    # Convert DD/MM/YYYY → date
+    class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
+
+    # 🔎 Get schedule details
+    cur.execute("""
+        SELECT faculty_id, section_id, group_id
+        FROM class_schedule
+        WHERE schedule_id = %s
+    """, (schedule_id,))
+
+    row = cur.fetchone()
+
+    if not row:
+        return "Invalid schedule", 400
+
+    faculty_id, section_id, group_id = row
+
+    # 📚 Load correct students
+    if group_id:
+        # Elective group
+        cur.execute("""
+            SELECT student_id
+            FROM students
+            WHERE section_id=%s AND group_id=%s
+        """, (section_id, group_id))
+    else:
+        # Entire section
+        cur.execute("""
+            SELECT student_id
+            FROM students
+            WHERE section_id=%s
+        """, (section_id,))
+
+    students = cur.fetchall()
+
+    # 📝 Insert / Update attendance (Schedule-wise)
+    for (student_id,) in students:
+
+        status = "Absent" if f"att_{student_id}" in request.form else "Present"
+
+        cur.execute("""
+            INSERT INTO attendance
+            (student_id, faculty_id, section_id, schedule_id,
+             week_id, date, status, marked_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (student_id, schedule_id, date)
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                marked_by = EXCLUDED.marked_by
+        """, (
+            student_id,
+            faculty_id,
+            section_id,
+            schedule_id,
+            week_id,
+            class_date,
+            status,
+            session['faculty_id']
+        ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    # 🔁 Redirect back to faculty dashboard
+    return redirect(url_for('faculty_dashboard'))
 
 @app.route('/logout')
 def logout():
@@ -973,5 +978,6 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 

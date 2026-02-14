@@ -815,7 +815,7 @@ def faculty_dashboard():
         section_id=session['section_id'],
         section_name=section_name
     )
-    @app.route('/daily-summary')
+@app.route('/daily-summary')
 def daily_summary():
     if 'faculty_id' not in session or session['role'] not in ('hod','ahod'):
         return "Access Denied", 403
@@ -878,6 +878,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

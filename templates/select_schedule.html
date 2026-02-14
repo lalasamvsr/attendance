@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Select Class</title>
+</head>
+<body>
+
+<h3>Scheduled Classes on {{ selected_date }}</h3>
+
+{% if schedules %}
+<table border="1" cellpadding="8">
+<tr>
+<th>Period</th>
+<th>Subject</th>
+<th>Action</th>
+</tr>
+
+{% for s in schedules %}
+<tr>
+<td>{{ s.period_no }}</td>
+<td>{{ s.subject }}</td>
+<td>
+<form action="/attendance/{{ s.schedule_id }}">
+<button>Mark Attendance</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</table>
+{% else %}
+<p>No class scheduled on this date.</p>
+{% endif %}
+
+<br>
+<a href="/faculty-dashboard">⬅ Back</a>
+
+</body>
+</html>

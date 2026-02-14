@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Daily Class Summary</title>
+<style>
+body{font-family:Arial;background:#f4f6f8;padding:20px;}
+table{border-collapse:collapse;width:100%;background:white;margin-top:20px;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+th{background:#eef2ff;}
+.present{color:green;font-weight:bold;}
+.absent{color:red;font-weight:bold;}
+</style>
+</head>
+<body>
+
+<h3>Daily Class Summary</h3>
+
+<form method="GET">
+<label>Select Date:</label>
+<input type="date" name="date" value="{{ selected_date }}">
+<button type="submit">View</button>
+</form>
+
+{% if summary %}
+<table>
+<tr>
+<th>Faculty</th>
+<th>Subject</th>
+<th>Section</th>
+<th>Present</th>
+<th>Absent</th>
+</tr>
+
+{% for s in summary %}
+<tr>
+<td>{{ s.faculty }}</td>
+<td>{{ s.subject }}</td>
+<td>{{ s.section }}</td>
+<td class="present">{{ s.present }}</td>
+<td class="absent">{{ s.absent }}</td>
+</tr>
+{% endfor %}
+</table>
+{% elif selected_date %}
+<p>No classes scheduled or attendance not marked on this date.</p>
+{% endif %}
+
+<br>
+<a href="/admin-dashboard">⬅ Back</a>
+
+</body>
+</html>

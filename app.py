@@ -345,37 +345,42 @@ def select():
     return redirect(url_for('attendance', faculty_id=faculty_id, section_id=section_id))
 
 
-@app.route('/attendance/<faculty_id>/<section_id>')
-def attendance(faculty_id, section_id):
-    if 'faculty_id' not in session:
-     return redirect(url_for('index'))
+@app.route('/attendance/<int:schedule_id>')
+def attendance(schedule_id):
 
-# Normal faculty restriction
-    if session['role'] == 'faculty':
-     if int(faculty_id) != session['faculty_id']:
-        return "Access Denied", 403
+    if 'faculty_id' not in session:
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-
-    # Detect elective group (GT / DF)
+    # 🔍 Get schedule details
     cur.execute("""
-        SELECT DISTINCT group_id
+        SELECT faculty_id, section_id, subject, group_id
         FROM class_schedule
-        WHERE faculty_id=%s AND section_id=%s AND group_id IS NOT NULL
-    """, (faculty_id, section_id))
-    row = cur.fetchone()
-    faculty_group_id = row[0] if row else None
+        WHERE schedule_id = %s
+    """, (schedule_id,))
 
-    # Load students
-    if faculty_group_id:
+    schedule = cur.fetchone()
+
+    if not schedule:
+        return "Invalid Schedule", 404
+
+    faculty_id, section_id, subject, group_id = schedule
+
+    # 🔐 Restrict normal faculty
+    if session['role'] == 'faculty':
+        if faculty_id != session['faculty_id']:
+            return "Access Denied", 403
+
+    # 📚 Load correct students
+    if group_id:
         cur.execute("""
             SELECT student_id, roll_no, name
             FROM students
             WHERE section_id=%s AND group_id=%s
             ORDER BY roll_no
-        """, (section_id, faculty_group_id))
+        """, (section_id, group_id))
     else:
         cur.execute("""
             SELECT student_id, roll_no, name
@@ -386,64 +391,65 @@ def attendance(faculty_id, section_id):
 
     students = cur.fetchall()
 
-    # Faculty class days
+    # 📅 Get class days
     cur.execute("""
         SELECT DISTINCT day_of_week
         FROM class_schedule
-        WHERE faculty_id=%s AND section_id=%s
-    """, (faculty_id, section_id))
+        WHERE schedule_id=%s
+    """, (schedule_id,))
     class_days = [r[0] for r in cur.fetchall()]
 
     semester_start = date(2026, 1, 19)
     week_dates = generate_week_dates(semester_start)
+
+    cur.close()
+    conn.close()
 
     return render_template(
         "attendance.html",
         students=students,
         faculty_id=faculty_id,
         section_id=section_id,
+        schedule_id=schedule_id,
+        subject=subject,
         class_days=class_days,
         week_dates=week_dates
     )
 
-
 @app.route('/save', methods=['POST'])
 def save():
 
-    # 🔐 Admins cannot mark attendance
-    if session.get('role') in ('hod', 'ahod'):
+    if session.get('role') in ('hod','ahod'):
         return "Admins cannot mark attendance", 403
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    faculty_id = session['faculty_id']
-    section_id = session['section_id']
+    faculty_id = int(request.form['faculty_id'])
+    section_id = int(request.form['section_id'])
     schedule_id = int(request.form['schedule_id'])
+    week_id = int(request.form['week_id'])
     attendance_date = request.form['attendance_date']
 
-    # Convert DD/MM/YYYY → date
     class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
 
-    # 🔎 Get group_id from this specific schedule
+    # 🔍 Get group_id from schedule
     cur.execute("""
         SELECT group_id
         FROM class_schedule
-        WHERE schedule_id = %s
+        WHERE schedule_id=%s
     """, (schedule_id,))
     row = cur.fetchone()
-    schedule_group_id = row[0] if row else None
+    group_id = row[0] if row else None
 
     # 📚 Load correct students
-    if schedule_group_id:
-        # Elective → only that group
+    if group_id:
         cur.execute("""
             SELECT student_id
             FROM students
             WHERE section_id=%s AND group_id=%s
-        """, (section_id, schedule_group_id))
+        """, (section_id, group_id))
     else:
-        # Whole section
         cur.execute("""
             SELECT student_id
             FROM students
@@ -452,15 +458,16 @@ def save():
 
     students = cur.fetchall()
 
-    # 📝 Insert / Update attendance PER SCHEDULE
+    # 📝 Insert attendance
     for (student_id,) in students:
 
         status = "Absent" if f"att_{student_id}" in request.form else "Present"
 
         cur.execute("""
             INSERT INTO attendance
-            (student_id, faculty_id, section_id, schedule_id, date, status, marked_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            (student_id, faculty_id, section_id, schedule_id,
+             week_id, date, status, marked_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (student_id, date, schedule_id)
             DO UPDATE SET
                 status = EXCLUDED.status,
@@ -470,25 +477,20 @@ def save():
             faculty_id,
             section_id,
             schedule_id,
+            week_id,
             class_date,
             status,
-            faculty_id
+            session['faculty_id']
         ))
 
     conn.commit()
     cur.close()
     conn.close()
 
-    # 🔁 Redirect to report and auto-show that date
     return redirect(url_for(
         'week_report',
         date=class_date.strftime("%Y-%m-%d")
     ))
-
-
-
-
-
 
 # ================= WEEK REPORT ================= 
 @app.route('/week-report')
@@ -920,8 +922,3 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
-
-
-
-
-

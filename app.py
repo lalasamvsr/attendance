@@ -417,32 +417,31 @@ def save():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    faculty_id = int(request.form['faculty_id'])
-    section_id = int(request.form['section_id'])
-    week_id = int(request.form['week_id'])
+    faculty_id = session['faculty_id']
+    section_id = session['section_id']
+    schedule_id = int(request.form['schedule_id'])
     attendance_date = request.form['attendance_date']
 
     # Convert DD/MM/YYYY → date
     class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
 
-    # 🔎 Detect if faculty teaches elective group (GT/DF type)
+    # 🔎 Get group_id from this specific schedule
     cur.execute("""
-        SELECT DISTINCT group_id
+        SELECT group_id
         FROM class_schedule
-        WHERE faculty_id=%s AND section_id=%s AND group_id IS NOT NULL
-    """, (faculty_id, section_id))
-
+        WHERE schedule_id = %s
+    """, (schedule_id,))
     row = cur.fetchone()
-    faculty_group_id = row[0] if row else None
+    schedule_group_id = row[0] if row else None
 
     # 📚 Load correct students
-    if faculty_group_id:
-        # Only students of that group
+    if schedule_group_id:
+        # Elective → only that group
         cur.execute("""
             SELECT student_id
             FROM students
             WHERE section_id=%s AND group_id=%s
-        """, (section_id, faculty_group_id))
+        """, (section_id, schedule_group_id))
     else:
         # Whole section
         cur.execute("""
@@ -453,16 +452,16 @@ def save():
 
     students = cur.fetchall()
 
-    # 📝 Insert / Update attendance
+    # 📝 Insert / Update attendance PER SCHEDULE
     for (student_id,) in students:
 
         status = "Absent" if f"att_{student_id}" in request.form else "Present"
 
         cur.execute("""
             INSERT INTO attendance
-            (student_id, faculty_id, section_id, week_id, date, status, marked_by)
+            (student_id, faculty_id, section_id, schedule_id, date, status, marked_by)
             VALUES (%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (student_id, date, faculty_id, section_id)
+            ON CONFLICT (student_id, date, schedule_id)
             DO UPDATE SET
                 status = EXCLUDED.status,
                 marked_by = EXCLUDED.marked_by
@@ -470,10 +469,10 @@ def save():
             student_id,
             faculty_id,
             section_id,
-            week_id,
+            schedule_id,
             class_date,
             status,
-            session['faculty_id']   # Who actually marked
+            faculty_id
         ))
 
     conn.commit()
@@ -485,6 +484,7 @@ def save():
         'week_report',
         date=class_date.strftime("%Y-%m-%d")
     ))
+
 
 
 
@@ -920,6 +920,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

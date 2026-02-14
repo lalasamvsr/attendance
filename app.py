@@ -917,6 +917,53 @@ def daily_summary():
         back_url=back_url
     )
 
+@app.route('/load-schedule')
+def load_schedule():
+    if 'faculty_id' not in session:
+        return redirect(url_for('index'))
+
+    selected_date = request.args.get('date')
+    if not selected_date:
+        return redirect(url_for('faculty_dashboard'))
+
+    report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
+    day_name = report_date.strftime("%A")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT schedule_id, subject, period_no
+        FROM class_schedule
+        WHERE faculty_id=%s
+          AND section_id=%s
+          AND day_of_week=%s
+        ORDER BY period_no
+    """, (
+        session['faculty_id'],
+        session['section_id'],
+        day_name
+    ))
+
+    rows = cur.fetchall()
+
+    schedules = [
+        {
+            "schedule_id": r[0],
+            "subject": r[1],
+            "period_no": r[2]
+        }
+        for r in rows
+    ]
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "select_schedule.html",
+        schedules=schedules,
+        selected_date=selected_date
+    )
 
 
 @app.route('/logout')
@@ -926,4 +973,5 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 

@@ -84,19 +84,7 @@ th{
 
 {% for s in students %}
 
-    {% if loop.index0 % 10 == 0 %}
-    <table>
-        <tr>
-            <th colspan="2">
-                Students {{ loop.index }} –
-                {{ loop.index + 9 if loop.index + 9 <= students|length else students|length }}
-            </th>
-        </tr>
-        <tr>
-            <th>Roll No</th>
-            <th>Status</th>
-        </tr>
-    {% endif %}
+    
 
     <tr>
         <td>{{ s[1] }}</td>
@@ -180,4 +168,5 @@ function onDateChange(){
 
 </body>
 </html>
+
 

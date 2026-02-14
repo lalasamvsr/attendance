@@ -39,6 +39,29 @@ th,td{
 th{
     background:#eef2ff;
 }
+.student-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap:6px;
+    margin-top:20px;
+}
+
+.student-item{
+    background:#fff;
+    padding:6px 8px;
+    border:1px solid #ddd;
+    border-radius:6px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:13px;
+}
+
+.student-item input{
+    transform: scale(1.1);
+    cursor:pointer;
+}
+
 </style>
 </head>
 
@@ -80,26 +103,16 @@ th{
 <div id="dayMessage" class="no-class"></div>
 
 <!-- STUDENTS -->
-<div class="table-wrapper">
-
+<!-- STUDENTS GRID -->
+<div class="student-grid">
 {% for s in students %}
-
-    
-
-    <tr>
-        <td>{{ s[1] }}</td>
-        <td>
-            <input type="checkbox" name="att_{{ s[0] }}" value="Absent">
-        </td>
-    </tr>
-
-    {% if loop.index % 10 == 0 or loop.last %}
-    </table>
-    {% endif %}
-
+    <div class="student-item">
+        <span class="roll">{{ s[1] }}</span>
+        <input type="checkbox" name="att_{{ s[0] }}" value="Absent">
+    </div>
 {% endfor %}
-
 </div>
+
 
 <br>
 <button type="submit" id="saveBtn" disabled>Save Attendance</button>
@@ -168,5 +181,6 @@ function onDateChange(){
 
 </body>
 </html>
+
 
 

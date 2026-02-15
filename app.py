@@ -981,6 +981,7 @@ def save():
     # Redirect to report of that date
     return redirect(url_for(
         'week_report',
+        schedule_id=schedule_id,
         date=class_date.strftime("%Y-%m-%d")
     ))
 
@@ -993,6 +994,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

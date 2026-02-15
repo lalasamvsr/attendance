@@ -966,7 +966,12 @@ def save():
     cur.close()
     conn.close()
 
-    return redirect(url_for('faculty_dashboard'))
+    return redirect(url_for(
+    'week_report',
+    date=class_date.strftime("%Y-%m-%d"),
+    schedule_id=schedule_id
+))
+
 
 
 @app.route('/logout')
@@ -976,6 +981,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

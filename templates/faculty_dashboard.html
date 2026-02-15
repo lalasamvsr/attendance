@@ -100,9 +100,15 @@ th{
 
 <hr>
 
-<form action="/load-schedule">
-    <button class="report">View Daily Report</button>
+<div class="section">
+<h3>View Daily Report</h3>
+
+<form action="/load-schedule" method="GET">
+    <label>Select Date:</label>
+    <input type="date" name="date" required>
+    <button class="report">View Report</button>
 </form>
+</div>
 
 <form action="/student-report">
     <button class="student">View Student Details</button>
@@ -120,4 +126,5 @@ th{
 
 </body>
 </html>
+
 

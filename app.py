@@ -459,6 +459,7 @@ def week_report():
     if session['role'] == 'faculty':
         if faculty_id != session['faculty_id']:
             return "Access Denied", 403
+    status_filter = request.args.get('filter', 'Absent')
 
     # 📊 Fetch attendance for this specific schedule
     cur.execute("""
@@ -994,6 +995,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

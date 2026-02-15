@@ -431,7 +431,7 @@ def week_report():
     schedule_id = request.args.get('schedule_id', type=int)
 
     if not selected_date or not schedule_id:
-    return render_template(
+         return render_template(
         "week_report.html",
         report=None,
         schedule_id=schedule_id,
@@ -994,6 +994,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

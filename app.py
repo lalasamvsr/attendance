@@ -896,37 +896,38 @@ def load_schedule():
 @app.route('/save', methods=['POST'])
 def save():
 
+    # 🔐 Only faculty can mark
     if 'faculty_id' not in session or session.get('role') != 'faculty':
         return "Access Denied", 403
-    print("SESSION:", session)
-    schedule_id = request.form.get('schedule_id')
-    week_id = request.form.get('week_id')
-    attendance_date = request.form.get('attendance_date')
-
-    if not schedule_id or not attendance_date:
-        return "Missing required fields", 400
-
-    schedule_id = int(schedule_id)
-    week_id = int(week_id)
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    class_date = datetime.strptime(attendance_date, "%d/%m/%Y").date()
+    schedule_id = int(request.form['schedule_id'])
+    attendance_date = request.form['attendance_date']
 
+    # Convert YYYY-MM-DD → date
+    class_date = datetime.strptime(attendance_date, "%Y-%m-%d").date()
+
+    # 🔢 Auto-calculate week_id
+    semester_start = date(2026, 1, 19)
+    diff_days = (class_date - semester_start).days
+    week_id = (diff_days // 7) + 1
+
+    # 🔍 Get schedule details
     cur.execute("""
         SELECT faculty_id, section_id, group_id
         FROM class_schedule
         WHERE schedule_id = %s
     """, (schedule_id,))
-
     row = cur.fetchone()
+
     if not row:
         return "Invalid schedule", 400
 
     faculty_id, section_id, group_id = row
 
-    # Load students
+    # 📚 Load students
     if group_id:
         cur.execute("""
             SELECT student_id
@@ -942,7 +943,9 @@ def save():
 
     students = cur.fetchall()
 
+    # 📝 Insert attendance
     for (student_id,) in students:
+
         status = "Absent" if f"att_{student_id}" in request.form else "Present"
 
         cur.execute("""
@@ -969,11 +972,11 @@ def save():
     cur.close()
     conn.close()
 
+    # Redirect to report of that date
     return redirect(url_for(
-    'week_report',
-    date=class_date.strftime("%Y-%m-%d"),
-    schedule_id=schedule_id
-))
+        'week_report',
+        date=class_date.strftime("%Y-%m-%d")
+    ))
 
 
 
@@ -984,6 +987,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

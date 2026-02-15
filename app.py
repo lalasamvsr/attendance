@@ -898,7 +898,7 @@ def save():
 
     if 'faculty_id' not in session or session.get('role') != 'faculty':
         return "Access Denied", 403
-
+    print("SESSION:", session)
     schedule_id = request.form.get('schedule_id')
     week_id = request.form.get('week_id')
     attendance_date = request.form.get('attendance_date')
@@ -984,6 +984,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

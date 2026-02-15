@@ -429,15 +429,16 @@ def week_report():
 
     selected_date = request.args.get('date')
     schedule_id = request.args.get('schedule_id', type=int)
+    status_filter = request.args.get('filter', 'Absent')   # Default = Absent
 
     if not selected_date or not schedule_id:
-         return render_template(
-        "week_report.html",
-        report=None,
-        schedule_id=schedule_id,
-        selected_date=selected_date
-    )
-
+        return render_template(
+            "week_report.html",
+            report=None,
+            schedule_id=schedule_id,
+            selected_date=selected_date,
+            filter=status_filter
+        )
 
     report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
@@ -447,7 +448,6 @@ def week_report():
         FROM class_schedule
         WHERE schedule_id = %s
     """, (schedule_id,))
-
     schedule = cur.fetchone()
 
     if not schedule:
@@ -459,18 +459,24 @@ def week_report():
     if session['role'] == 'faculty':
         if faculty_id != session['faculty_id']:
             return "Access Denied", 403
-    status_filter = request.args.get('filter', 'Absent')
 
-    # 📊 Fetch attendance for this specific schedule
-    cur.execute("""
+    # 🔎 Build dynamic query
+    query = """
         SELECT s.roll_no, s.name, a.status
         FROM attendance a
         JOIN students s ON s.student_id = a.student_id
         WHERE a.date = %s
           AND a.schedule_id = %s
-        ORDER BY s.roll_no
-    """, (report_date, schedule_id))
+    """
+    params = [report_date, schedule_id]
 
+    if status_filter != "All":
+        query += " AND a.status = %s"
+        params.append(status_filter)
+
+    query += " ORDER BY s.roll_no"
+
+    cur.execute(query, tuple(params))
     rows = cur.fetchall()
 
     report = [
@@ -478,7 +484,7 @@ def week_report():
         for r in rows
     ]
 
-    # 📈 Correct Count (schedule-based)
+    # 📊 Correct counts (not filtered)
     cur.execute("""
         SELECT
             COUNT(*) FILTER (WHERE status='Present'),
@@ -500,15 +506,9 @@ def week_report():
         present_count=present_count,
         absent_count=absent_count,
         subject=subject,
-        schedule_id=schedule_id
+        schedule_id=schedule_id,
+        filter=status_filter
     )
-
-
-
-
-
-
-
 
 # ================= STUDENT REPORT =================
 @app.route('/student-report')
@@ -995,6 +995,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

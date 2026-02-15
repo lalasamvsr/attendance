@@ -2,42 +2,55 @@
 <html>
 <head>
 <title>Select Class</title>
+<style>
+body{font-family:Arial;background:#f4f6f8;padding:20px;}
+table{border-collapse:collapse;width:600px;background:white;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+th{background:#eef2ff;}
+button{padding:6px 10px;cursor:pointer;}
+</style>
 </head>
 <body>
 
 <h3>Scheduled Classes on {{ selected_date }}</h3>
 
 {% if schedules %}
-<table border="1" cellpadding="8">
+<table>
 <tr>
 <th>Period</th>
 <th>Subject</th>
-<th>Action</th>
+<th>Mark</th>
+<th>Report</th>
 </tr>
 
 {% for s in schedules %}
 <tr>
 <td>{{ s.period_no }}</td>
 <td>{{ s.subject }}</td>
+
 <td>
 <form action="/attendance/{{ s.schedule_id }}">
-<button>Mark Attendance</button>
+<button type="submit">Mark Attendance</button>
 </form>
 </td>
-</tr>
-{% endfor %}
-</table>
-{% else %}
-<p>No class scheduled on this date.</p>
-{% endif %}
 
-<br>
-  <form action="/week-report" method="GET">
+<td>
+<form action="/week-report" method="GET">
     <input type="hidden" name="schedule_id" value="{{ s.schedule_id }}">
     <input type="hidden" name="date" value="{{ selected_date }}">
     <button type="submit">View Report</button>
 </form>
+</td>
 
+</tr>
+{% endfor %}
+</table>
+
+{% else %}
+<p style="color:red;">No class scheduled on this date.</p>
+{% endif %}
+
+<br>
 <a href="/faculty-dashboard">⬅ Back</a>
 
 </body>

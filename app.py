@@ -428,41 +428,42 @@ def week_report():
     cur = conn.cursor()
 
     selected_date = request.args.get('date')
-    requested_faculty_id = request.args.get('faculty_id', type=int)
+    schedule_id = request.args.get('schedule_id', type=int)
 
-    if not selected_date:
+    if not selected_date or not schedule_id:
         return render_template("week_report.html", report=None)
 
     report_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
-    # 🔐 Decide whose attendance to show
+    # 🔎 Get schedule info
+    cur.execute("""
+        SELECT faculty_id, subject
+        FROM class_schedule
+        WHERE schedule_id = %s
+    """, (schedule_id,))
 
+    schedule = cur.fetchone()
+
+    if not schedule:
+        return "Invalid schedule", 404
+
+    faculty_id, subject = schedule
+
+    # 🔐 Restrict normal faculty
     if session['role'] == 'faculty':
-        faculty_filter = session['faculty_id']
+        if faculty_id != session['faculty_id']:
+            return "Access Denied", 403
 
-    elif session['role'] in ('hod', 'ahod'):
-
-        # If HOD clicked "My Daily Report"
-        if requested_faculty_id == session['faculty_id'] or not requested_faculty_id:
-            faculty_filter = session['faculty_id']
-        else:
-            # If HOD is using admin filter to view someone else
-            faculty_filter = requested_faculty_id
-
-    else:
-        return "Unauthorized", 403
-
-    # 🔎 Fetch attendance
-    query = """
+    # 📊 Fetch attendance for this specific schedule
+    cur.execute("""
         SELECT s.roll_no, s.name, a.status
         FROM attendance a
         JOIN students s ON s.student_id = a.student_id
         WHERE a.date = %s
-          AND a.faculty_id = %s
+          AND a.schedule_id = %s
         ORDER BY s.roll_no
-    """
+    """, (report_date, schedule_id))
 
-    cur.execute(query, (report_date, faculty_filter))
     rows = cur.fetchall()
 
     report = [
@@ -470,15 +471,15 @@ def week_report():
         for r in rows
     ]
 
-    # ✅ Correct Count (filtered by faculty)
+    # 📈 Correct Count (schedule-based)
     cur.execute("""
         SELECT
             COUNT(*) FILTER (WHERE status='Present'),
             COUNT(*) FILTER (WHERE status='Absent')
         FROM attendance
         WHERE date = %s
-          AND faculty_id = %s
-    """, (report_date, faculty_filter))
+          AND schedule_id = %s
+    """, (report_date, schedule_id))
 
     present_count, absent_count = cur.fetchone()
 
@@ -490,7 +491,9 @@ def week_report():
         report=report,
         selected_date=selected_date,
         present_count=present_count,
-        absent_count=absent_count
+        absent_count=absent_count,
+        subject=subject,
+        schedule_id=schedule_id
     )
 
 
@@ -981,6 +984,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

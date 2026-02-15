@@ -903,7 +903,7 @@ def save():
     week_id = request.form.get('week_id')
     attendance_date = request.form.get('attendance_date')
 
-    if not schedule_id or not week_id or not attendance_date:
+    if not schedule_id or not attendance_date:
         return "Missing required fields", 400
 
     schedule_id = int(schedule_id)
@@ -984,6 +984,7 @@ def logout():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
+
 
 
 

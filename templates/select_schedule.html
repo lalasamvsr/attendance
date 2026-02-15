@@ -32,6 +32,12 @@
 {% endif %}
 
 <br>
+  <form action="/week-report" method="GET">
+    <input type="hidden" name="schedule_id" value="{{ s.schedule_id }}">
+    <input type="hidden" name="date" value="{{ selected_date }}">
+    <button type="submit">View Report</button>
+</form>
+
 <a href="/faculty-dashboard">⬅ Back</a>
 
 </body>
